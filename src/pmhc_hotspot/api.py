@@ -332,6 +332,7 @@ class HotspotPredictor:
         *,
         download: bool = True,
         contact_mode: str = "standard",
+        cache_dir: str = "data/pdb",
     ):
         """Build residue-level ML training data from benchmark structures."""
         from pmhc_hotspot.ml.dataset import build_training_dataset
@@ -340,4 +341,5 @@ class HotspotPredictor:
             manifest_path,
             download=download,
             contact_mode=contact_mode,
+            cache_dir=cache_dir,
         )

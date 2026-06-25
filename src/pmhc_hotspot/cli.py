@@ -215,6 +215,7 @@ def benchmark_cmd(
 @main.command("ml-train")
 @click.option("--manifest", "manifest_path", default=None)
 @click.option("--download/--no-download", default=False)
+@click.option("--cache-dir", default="data/pdb", show_default=True, help="PDB download cache")
 @click.option("--model", "model_type", default="logistic", type=click.Choice(["logistic", "xgboost"]))
 @click.option(
     "--contact-mode",
@@ -224,11 +225,14 @@ def benchmark_cmd(
     help="TCR-contact label definition when building training rows",
 )
 @click.option("--out", "out_json", default="ml_cv_report.json", show_default=True)
-def ml_train_cmd(manifest_path, download, model_type, contact_mode, out_json):
+def ml_train_cmd(manifest_path, download, cache_dir, model_type, contact_mode, out_json):
     """Build training data from benchmark manifest and run grouped CV."""
     predictor = HotspotPredictor()
     df = predictor.build_ml_training_frame(
-        manifest_path, download=download, contact_mode=contact_mode
+        manifest_path,
+        download=download,
+        contact_mode=contact_mode,
+        cache_dir=cache_dir,
     )
     if df.empty:
         raise click.ClickException("No training rows produced. Try --download or check manifest paths.")
@@ -270,6 +274,7 @@ def ml_pretrain_cmd(iedb_path, atlas_path, model_type, out_json):
 @main.command("ml-fine-tune")
 @click.option("--manifest", "manifest_path", default=None)
 @click.option("--download/--no-download", default=False)
+@click.option("--cache-dir", default="data/pdb", show_default=True, help="PDB download cache")
 @click.option("--iedb", "iedb_path", type=click.Path(exists=True), default=None)
 @click.option("--atlas", "atlas_path", type=click.Path(exists=True), default=None)
 @click.option("--model", "model_type", default="logistic", type=click.Choice(["logistic", "xgboost"]))
@@ -281,7 +286,7 @@ def ml_pretrain_cmd(iedb_path, atlas_path, model_type, out_json):
 )
 @click.option("--out", "out_json", default="finetune_report.json", show_default=True)
 def ml_fine_tune_cmd(
-    manifest_path, download, iedb_path, atlas_path, model_type, contact_mode, out_json
+    manifest_path, download, cache_dir, iedb_path, atlas_path, model_type, contact_mode, out_json
 ):
     """Stage 2: fine-tune on structural TCR-contact residue labels."""
     from pmhc_hotspot.api import HotspotPredictor
@@ -291,7 +296,10 @@ def ml_fine_tune_cmd(
 
     predictor = HotspotPredictor()
     structural = predictor.build_ml_training_frame(
-        manifest_path, download=download, contact_mode=contact_mode
+        manifest_path,
+        download=download,
+        contact_mode=contact_mode,
+        cache_dir=cache_dir,
     )
     if structural.empty:
         raise click.ClickException("No structural training rows produced")
@@ -323,6 +331,7 @@ def ml_fine_tune_cmd(
 @click.option("--atlas", "atlas_path", type=click.Path(exists=True), default=None)
 @click.option("--manifest", "manifest_path", default=None)
 @click.option("--download/--no-download", default=False)
+@click.option("--cache-dir", default="data/pdb", show_default=True, help="PDB download cache")
 @click.option("--model", "model_type", default="logistic", type=click.Choice(["logistic", "xgboost"]))
 @click.option(
     "--contact-mode",
@@ -344,6 +353,7 @@ def ml_staged_cmd(
     atlas_path,
     manifest_path,
     download,
+    cache_dir,
     model_type,
     contact_mode,
     save_model,
@@ -371,7 +381,10 @@ def ml_staged_cmd(
         public_df = pd.DataFrame()
 
     structural_df = HotspotPredictor().build_ml_training_frame(
-        manifest_path, download=download, contact_mode=contact_mode
+        manifest_path,
+        download=download,
+        contact_mode=contact_mode,
+        cache_dir=cache_dir,
     )
     report = run_staged_training(
         public_df,
@@ -415,6 +428,7 @@ def ml_staged_cmd(
 @click.option("--atlas", "atlas_path", type=click.Path(exists=True), default=None)
 @click.option("--manifest", "manifest_path", default=None)
 @click.option("--download/--no-download", default=False)
+@click.option("--cache-dir", default="data/pdb", show_default=True, help="PDB download cache")
 @click.option("--model", "model_type", default="xgboost", type=click.Choice(["logistic", "xgboost"]))
 @click.option(
     "--contact-mode",
@@ -442,6 +456,7 @@ def ml_holdout_cmd(
     atlas_path,
     manifest_path,
     download,
+    cache_dir,
     model_type,
     contact_mode,
     scoring_mode,
@@ -459,7 +474,10 @@ def ml_holdout_cmd(
         frames.append(load_atlas_csv(atlas_path))
     public_df = combine_public_datasets(frames)
     structural_df = HotspotPredictor().build_ml_training_frame(
-        manifest_path, download=download, contact_mode=contact_mode
+        manifest_path,
+        download=download,
+        contact_mode=contact_mode,
+        cache_dir=cache_dir,
     )
     report = run_leave_structures_out(
         public_df,
@@ -471,6 +489,7 @@ def ml_holdout_cmd(
         scoring_mode=scoring_mode,
         save_model_path=save_model,
         download=download,
+        cache_dir=cache_dir,
     )
     _write_json(out_json, report, indent=2, default=str)
     summary = report["held_out_benchmark"]["summary"]
