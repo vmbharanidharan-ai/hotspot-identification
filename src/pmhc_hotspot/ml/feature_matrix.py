@@ -12,10 +12,11 @@ def build_training_frame(
     pdb_id: str | None = None,
     allele: str | None = None,
     peptide_length: int | None = None,
+    skip_low_confidence: bool = False,
 ) -> pd.DataFrame:
     rows = []
     for r in prediction_result.residue_scores:
-        if r.low_confidence:
+        if skip_low_confidence and r.low_confidence:
             continue
         rows.append(
             {

@@ -5,7 +5,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pmhc_hotspot.benchmark.dataset import PDBDownloader, extract_peptide_contact_positions
+from pmhc_hotspot.benchmark.dataset import (
+    PDBDownloader,
+    extract_peptide_contact_positions,
+    resolve_benchmark_entry,
+)
 from pmhc_hotspot.benchmark.evaluate import aggregate_results, evaluate_structure, results_to_dict
 from pmhc_hotspot.benchmark.manifest import BenchmarkManifest
 
@@ -57,6 +61,8 @@ class BenchmarkRunner:
             logger.info("Benchmarking %s", entry.pdb_id)
             try:
                 allele = entry.allele or self.predictor.allele
+                structure = self.predictor._load_structure_for_benchmark(pdb_path)
+                entry = resolve_benchmark_entry(structure, entry)
                 predictor = self.predictor
                 if allele != self.predictor.allele or entry.peptide_chain or entry.hla_chain:
                     from pmhc_hotspot.api import HotspotPredictor
@@ -71,7 +77,6 @@ class BenchmarkRunner:
 
                 prediction = predictor.predict(pdb_path)
                 ordered = [r.position for r in prediction.residue_scores]
-                structure = predictor._load_structure_for_benchmark(pdb_path)
                 contacts = extract_peptide_contact_positions(structure, entry)
 
                 ev = evaluate_structure(

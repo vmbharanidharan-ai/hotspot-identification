@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from pmhc_hotspot.api import HotspotPredictor
-from pmhc_hotspot.benchmark.dataset import PDBDownloader, extract_peptide_contact_positions
+from pmhc_hotspot.benchmark.dataset import PDBDownloader, extract_peptide_contact_positions, resolve_benchmark_entry
 from pmhc_hotspot.benchmark.manifest import BenchmarkManifest
 from pmhc_hotspot.ml.feature_matrix import build_training_frame
 
@@ -31,13 +31,14 @@ def build_training_dataset(
     frames = []
     for entry in entries:
         try:
+            structure = HotspotPredictor()._load_structure_for_benchmark(entry.resolved_pdb_path)
+            entry = resolve_benchmark_entry(structure, entry)
             predictor = HotspotPredictor(
                 allele=entry.allele,
                 peptide_chain=entry.peptide_chain,
                 hla_chain=entry.hla_chain,
             )
-            prediction = predictor.predict(entry.resolved_pdb_path)
-            structure = predictor._load_structure_for_benchmark(entry.resolved_pdb_path)
+            prediction = predictor.predict(entry.resolved_pdb_path, select_hotspots=False)
             contacts = extract_peptide_contact_positions(structure, entry)
             labels = {pos: 1 for pos in contacts}
             frame = build_training_frame(

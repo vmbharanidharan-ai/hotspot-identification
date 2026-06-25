@@ -66,7 +66,7 @@ class HotspotPredictor:
     def _load_cached(self, path: str):
         return self._loader.load(path)
 
-    def predict(self, structure_path: str | Path) -> PredictionResult:
+    def predict(self, structure_path: str | Path, *, select_hotspots: bool = True) -> PredictionResult:
         path = str(structure_path)
         structure = self._load_cached(path)
 
@@ -203,15 +203,18 @@ class HotspotPredictor:
         )
         patches = patch_selector.select(residue_scores)
 
-        hotspots = select_rfdiffusion_hotspots(
-            residue_scores,
-            allele=self.allele,
-            min_hotspots=self.hotspot_config["min_hotspots"],
-            max_hotspots=self.hotspot_config["max_hotspots"],
-            min_hydrophobic=self.hotspot_config["min_hydrophobic"],
-        )
-
-        rfdiffusion_hotspot_res = ",".join(h.rfdiffusion_token for h in hotspots)
+        if select_hotspots:
+            hotspots = select_rfdiffusion_hotspots(
+                residue_scores,
+                allele=self.allele,
+                min_hotspots=self.hotspot_config["min_hotspots"],
+                max_hotspots=self.hotspot_config["max_hotspots"],
+                min_hydrophobic=self.hotspot_config["min_hydrophobic"],
+            )
+            rfdiffusion_hotspot_res = ",".join(h.rfdiffusion_token for h in hotspots)
+        else:
+            hotspots = []
+            rfdiffusion_hotspot_res = ""
 
         pep_resseqs = [r.id[1] for r in prm.residues]
         hla_resseqs = [r.id[1] for r in chain_ca_residues(hla_chains[0])]

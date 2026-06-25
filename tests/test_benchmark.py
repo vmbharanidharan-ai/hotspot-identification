@@ -4,9 +4,9 @@ from pmhc_hotspot.benchmark.evaluate import aggregate_results, evaluate_structur
 from pmhc_hotspot.benchmark.manifest import BenchmarkManifest
 
 
-def test_default_manifest_has_15_structures():
+def test_default_manifest_has_structures():
     manifest = BenchmarkManifest.default()
-    assert len(manifest) >= 15
+    assert len(manifest) >= 11
 
 
 def test_evaluate_structure_metrics():
@@ -21,6 +21,33 @@ def test_evaluate_structure_metrics():
     assert ev.recall_at_k[3] > 0
     assert ev.recall_at_k[5] >= ev.recall_at_k[3]
     assert 0.0 <= ev.anchor_avoidance_at_k[5] <= 1.0
+
+
+def test_suggest_benchmark_chains_1bd2():
+    from pmhc_hotspot.benchmark.dataset import suggest_benchmark_chains
+
+    suggested = suggest_benchmark_chains({"A": 275, "B": 99, "C": 9, "D": 190, "E": 242})
+    assert suggested == {"peptide_chain": "C", "hla_chain": "A", "tcr_chains": ("E", "D")}
+
+
+def test_resolve_benchmark_entry_falls_back():
+    from Bio.PDB import PDBParser
+
+    from pmhc_hotspot.benchmark.dataset import resolve_benchmark_entry
+    from pmhc_hotspot.benchmark.manifest import BenchmarkEntry
+
+    structure = PDBParser(QUIET=True).get_structure("x", "data/pdb/5BRZ.pdb")
+    entry = BenchmarkEntry(
+        pdb_id="5BRZ",
+        allele="HLA-A*02:01",
+        peptide_chain="P",
+        hla_chain="M",
+        tcr_chains=("D", "E"),
+        pdb_path="data/pdb/5BRZ.pdb",
+    )
+    resolved = resolve_benchmark_entry(structure, entry)
+    assert resolved.peptide_chain == "C"
+    assert resolved.hla_chain == "A"
 
 
 def test_runner_local_mini_manifest():

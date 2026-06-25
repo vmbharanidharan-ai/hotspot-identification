@@ -1,5 +1,6 @@
 # Curated TCR-bound peptide-MHC structures for benchmark evaluation.
-# Chain IDs verified against RCSB PDB depositions.
+# Chain IDs verified against downloaded RCSB PDB files (asymmetric unit).
+# Excluded (no discrete 8-15 residue peptide chain): 2C5L, 3GHW, 3O6F, 5NM8
 structures:
   - pdb_id: 1BD2
     allele: HLA-A*02:01
@@ -8,32 +9,12 @@ structures:
     tcr_chains: [D, E]
     notes: Classic HLA-A2/Tax/TCR complex
 
-  - pdb_id: 2C5L
-    allele: HLA-A*02:01
-    peptide_chain: C
-    hla_chain: A
-    tcr_chains: [D, E]
-    notes: HLA-A2 peptide-TCR
-
-  - pdb_id: 3GHW
-    allele: HLA-B*44:02
-    peptide_chain: C
-    hla_chain: A
-    tcr_chains: [D, E]
-    notes: HLA-B44 peptide-TCR
-
-  - pdb_id: 3O6F
-    allele: HLA-A*02:01
-    peptide_chain: P
-    hla_chain: M
-    tcr_chains: [A, B]
-    notes: HLA-A2 TCR complex
-
   - pdb_id: 3UTT
     allele: HLA-A*02:01
-    peptide_chain: P
-    hla_chain: M
-    tcr_chains: [A, B]
+    peptide_chain: C
+    hla_chain: A
+    tcr_chains: [D, E]
+    notes: Dual complex in ASU; first complex chains
 
   - pdb_id: 4JFD
     allele: HLA-A*02:01
@@ -43,8 +24,8 @@ structures:
 
   - pdb_id: 5BRZ
     allele: HLA-A*02:01
-    peptide_chain: P
-    hla_chain: M
+    peptide_chain: C
+    hla_chain: A
     tcr_chains: [D, E]
 
   - pdb_id: 5C0B
@@ -55,26 +36,20 @@ structures:
 
   - pdb_id: 5HHM
     allele: HLA-A*02:01
-    peptide_chain: P
-    hla_chain: M
+    peptide_chain: C
+    hla_chain: A
     tcr_chains: [D, E]
 
   - pdb_id: 5HYJ
     allele: HLA-A*02:01
-    peptide_chain: P
-    hla_chain: M
-    tcr_chains: [A, B]
-
-  - pdb_id: 5NM8
-    allele: HLA-A*02:01
-    peptide_chain: P
-    hla_chain: M
-    tcr_chains: [A, B]
+    peptide_chain: C
+    hla_chain: A
+    tcr_chains: [D, E]
 
   - pdb_id: 5NHT
     allele: HLA-A*02:01
     peptide_chain: P
-    hla_chain: M
+    hla_chain: H
     tcr_chains: [A, B]
 
   - pdb_id: 2VLJ
@@ -92,6 +67,6 @@ structures:
 
   - pdb_id: 6D78
     allele: HLA-A*02:01
-    peptide_chain: P
-    hla_chain: M
-    tcr_chains: [A, B]
+    peptide_chain: C
+    hla_chain: A
+    tcr_chains: [D, E]
