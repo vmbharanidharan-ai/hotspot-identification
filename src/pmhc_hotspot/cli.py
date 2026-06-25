@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import click
 
@@ -10,6 +11,14 @@ from pmhc_hotspot.api import HotspotPredictor
 from pmhc_hotspot.explain import format_explanation
 from pmhc_hotspot.export import export_rfdiffusion_template, to_json, to_tsv
 from pmhc_hotspot.features.mutation import MutationScorer
+
+
+def _write_json(path: str, payload, **kwargs) -> None:
+    out = Path(path)
+    if out.parent != Path("."):
+        out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w") as fh:
+        json.dump(payload, fh, **kwargs)
 
 
 @click.group()
@@ -160,8 +169,7 @@ def benchmark_cmd(manifest_path, allele, download, cache_dir, out_json):
         download=download,
         cache_dir=cache_dir,
     )
-    with open(out_json, "w") as fh:
-        json.dump(report, fh, indent=2)
+    _write_json(out_json, report, indent=2)
     click.echo(f"Wrote {out_json}")
     summary = report.get("summary", {})
     click.echo(f"Structures evaluated: {summary.get('n_structures', 0)}")
@@ -185,8 +193,7 @@ def ml_train_cmd(manifest_path, download, model_type, out_json):
     from pmhc_hotspot.ml.train import train_cv
 
     report = train_cv(df, model_type=model_type)
-    with open(out_json, "w") as fh:
-        json.dump(report, fh, indent=2)
+    _write_json(out_json, report, indent=2)
     click.echo(f"Training rows: {report['n_rows']} (positives: {report['n_positive']})")
     click.echo(f"Overall ROC-AUC: {report['overall']['roc_auc']:.3f}")
     click.echo(f"Wrote {out_json}")
@@ -212,8 +219,7 @@ def ml_pretrain_cmd(iedb_path, atlas_path, model_type, out_json):
 
     df = combine_public_datasets(frames)
     report = train_public_pretrain(df, model_type=model_type)
-    with open(out_json, "w") as fh:
-        json.dump({k: v for k, v in report.items() if k != "oof"}, fh, indent=2)
+    _write_json(out_json, {k: v for k, v in report.items() if k != "oof"}, indent=2)
     click.echo(f"Public rows: {report['n_rows']} | ROC-AUC: {report['roc_auc']:.3f}")
     click.echo(f"Wrote {out_json}")
 
@@ -254,8 +260,7 @@ def ml_fine_tune_cmd(manifest_path, download, iedb_path, atlas_path, model_type,
         model_type=model_type,
         use_pretrain_feature=use_pretrain,
     )
-    with open(out_json, "w") as fh:
-        json.dump(report, fh, indent=2, default=str)
+    _write_json(out_json, report, indent=2, default=str)
     click.echo(f"Structural rows: {report['n_rows']} | ROC-AUC: {report['overall']['roc_auc']:.3f}")
     click.echo(f"Wrote {out_json}")
 
@@ -285,8 +290,7 @@ def ml_staged_cmd(iedb_path, atlas_path, manifest_path, download, model_type, ou
         "n_public_rows": report["n_public_rows"],
         "n_structural_rows": report["n_structural_rows"],
     }
-    with open(out_json, "w") as fh:
-        json.dump(serializable, fh, indent=2, default=str)
+    _write_json(out_json, serializable, indent=2, default=str)
     click.echo(f"Pretrain ROC-AUC: {report['pretrain_cv']['roc_auc']:.3f}")
     click.echo(f"Finetune ROC-AUC: {report['finetune_cv']['overall']['roc_auc']:.3f}")
     click.echo(f"Wrote {out_json}")
