@@ -8,11 +8,11 @@ from pmhc_hotspot.ml.hybrid import HybridScorer
 from pmhc_hotspot.ml.pretrain import train_public_pretrain
 
 
-def test_load_iedb_csv():
-    df = load_iedb_csv("tests/data/sample_iedb.csv")
-    assert len(df) == 8
+def test_load_iedb_native_export():
+    df = load_iedb_csv("tests/data/sample_iedb_native.csv")
+    assert len(df) == 3
     assert set(df["label"]) == {0, 1}
-    assert df["source"].iloc[0] == "IEDB"
+    assert df["allele"].iloc[0].startswith("HLA-")
 
 
 def test_combine_public_datasets():
