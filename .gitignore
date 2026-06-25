@@ -9,6 +9,12 @@ build/
 .venv/
 venv/
 .env
+*.egg
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
 
 # IDE
 .idea/
@@ -17,7 +23,11 @@ venv/
 .DS_Store
 
 # Data & outputs
-data/
+data/pdb/
 outputs/
 *.pdb
-*.cif
+!tests/data/*.pdb
+!examples/*.pdb
+
+# Docs build
+docs/_build/

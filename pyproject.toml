@@ -1,0 +1,93 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pmhc-hotspot"
+version = "0.1.0"
+description = "Structure- and immunology-informed hotspot selection for peptide-MHC binder design"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "Vedha Bharanidharan" },
+]
+keywords = [
+    "pMHC",
+    "hotspot",
+    "RFdiffusion",
+    "peptide-MHC",
+    "protein design",
+    "immunology",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "biopython>=1.83",
+    "click>=8.1",
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "pyyaml>=6.0",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+ml = [
+    "scikit-learn>=1.4",
+    "xgboost>=2.0",
+]
+dev = [
+    "black>=24.0",
+    "build>=1.0",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+    "twine>=5.0",
+]
+docs = [
+    "myst-parser>=2.0",
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/vmbharanidharan-ai/hotspot-identification"
+Repository = "https://github.com/vmbharanidharan-ai/hotspot-identification"
+Issues = "https://github.com/vmbharanidharan-ai/hotspot-identification/issues"
+
+[project.scripts]
+pmhc-hotspot = "pmhc_hotspot.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pmhc_hotspot"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/examples",
+    "/conda",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]

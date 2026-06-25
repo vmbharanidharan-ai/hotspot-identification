@@ -1,0 +1,38 @@
+{% set name = "pmhc-hotspot" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  path: ..
+
+build:
+  noarch: python
+  script: {{ PYTHON }} -m pip install . -vv
+
+requirements:
+  host:
+    - python >=3.10
+    - pip
+    - hatchling >=1.25
+  run:
+    - python >=3.10
+    - numpy >=1.26
+    - scipy >=1.11
+    - pandas >=2.0
+    - biopython >=1.83
+    - pyyaml >=6.0
+    - click >=8.1
+
+test:
+  imports:
+    - pmhc_hotspot
+  commands:
+    - pytest -q
+
+about:
+  home: https://github.com/vmbharanidharan-ai/hotspot-identification
+  license: MIT
+  summary: Structure-aware hotspot selection for peptide-MHC binder design
