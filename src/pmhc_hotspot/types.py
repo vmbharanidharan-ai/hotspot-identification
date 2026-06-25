@@ -32,6 +32,7 @@ class ResidueScore:
     tcr_exposure_prior: float = 0.0
     is_anchor: bool = False
     is_buried: bool = False
+    low_confidence: bool = False
     eligible_for_hotspot: bool = True
     explanation: dict[str, float] = field(default_factory=dict)
 

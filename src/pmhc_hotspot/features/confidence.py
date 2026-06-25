@@ -23,3 +23,8 @@ class ConfidenceScorer:
             return float(min(1.0, max(0.0, bfactor / 100.0)))
         # Crystallographic B-factor: lower is better; typical range 10–80
         return float(min(1.0, max(0.1, 1.0 - (bfactor - 10.0) / 100.0)))
+
+    @staticmethod
+    def is_low_confidence(score: float, threshold: float = 0.5) -> bool:
+        """Flag structurally uncertain residues before scoring or ML training."""
+        return score < threshold

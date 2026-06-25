@@ -1,0 +1,7 @@
+structures:
+  - pdb_id: MINI
+    allele: HLA-A*02:01
+    peptide_chain: P
+    hla_chain: H
+    tcr_chains: []
+    pdb_path: tests/data/minimal_pmhc.pdb

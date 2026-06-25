@@ -302,21 +302,33 @@ Full `PredictionResult` serialization including patches, metadata, and provenanc
 
 ## Benchmarking
 
-A scaffold is included for three evaluation axes:
+Run the bundled 15-structure TCR-contact benchmark (download PDBs first):
 
-1. **TCR-contact recovery** — overlap with known TCR-contacted peptide positions in PDB complexes
-2. **Anchor avoidance** — fraction of predictions avoiding MHC anchor positions
-3. **Patch contiguity** — spatial coherence of selected hotspots
-
-```python
-from pmhc_hotspot.benchmarking.dataset import PDBDataset
-from pmhc_hotspot.benchmarking.metrics import HotspotEvaluator
-
-dataset = PDBDataset()
-paths = dataset.download_all()  # curated PDB IDs
+```bash
+pmhc-hotspot benchmark --download --out benchmark_report.json
 ```
 
-Curated benchmark IDs: `1A6Z`, `2C5L`, `3GHW`, `2VLJ`, `5NHT`, `5NM8`.
+From Python:
+
+```python
+from pmhc_hotspot import HotspotPredictor
+
+report = HotspotPredictor(allele="HLA-A*02:01").benchmark(download=True)
+print(report["summary"])
+```
+
+Metrics per structure: recall@k, precision@k, anchor avoidance@k, patch contiguity@k, stratified by peptide length (8–9, 10–11, 12+).
+
+### Optional ML layer
+
+```bash
+pip install -e ".[ml]"
+pmhc-hotspot ml-train --download --model logistic --out ml_cv_report.json
+```
+
+Training uses **GroupKFold by PDB** to avoid structure leakage. Low-confidence residues are excluded from training rows.
+
+See [docs/PUBLISHING.md](docs/PUBLISHING.md) for PyPI and conda-forge release steps.
 
 ---
 
@@ -361,9 +373,9 @@ black --check src tests
 
 | Phase | Status | Content |
 |-------|--------|---------|
-| **1** | ✅ v0.1.0 | Deterministic scorer, patches, RFdiffusion export, CLI |
-| **2** | Planned | Full benchmark on 10+ TCR-bound pMHC structures |
-| **3** | Optional | XGBoost layer trained on TCR-contact labels |
+| **1** | ✅ v0.2.0 | Deterministic scorer, patches, RFdiffusion export, CLI, benchmark runner |
+| **2** | ✅ v0.2.0 | Benchmark runner on 15 TCR-bound structures; ML CV scaffold |
+| **3** | Optional | Production XGBoost model artifact + hybrid scoring integration |
 
 ---
 

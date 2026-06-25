@@ -141,5 +141,56 @@ def validate_cmd(structure_path, peptide_chain, hla_chain):
         click.echo("Structure validation passed with warnings.")
 
 
+@main.command("benchmark")
+@click.option(
+    "--manifest",
+    "manifest_path",
+    default=None,
+    help="Benchmark manifest YAML (default: bundled 15-structure set)",
+)
+@click.option("--allele", default=None, help="Override allele for all structures")
+@click.option("--download/--no-download", default=False, help="Download missing PDBs via PDBList")
+@click.option("--cache-dir", default="data/pdb", show_default=True)
+@click.option("--out", "out_json", default="benchmark_report.json", show_default=True)
+def benchmark_cmd(manifest_path, allele, download, cache_dir, out_json):
+    """Run TCR-contact recovery benchmark over curated structures."""
+    predictor = HotspotPredictor(allele=allele)
+    report = predictor.benchmark(
+        manifest_path,
+        download=download,
+        cache_dir=cache_dir,
+    )
+    with open(out_json, "w") as fh:
+        json.dump(report, fh, indent=2)
+    click.echo(f"Wrote {out_json}")
+    summary = report.get("summary", {})
+    click.echo(f"Structures evaluated: {summary.get('n_structures', 0)}")
+    if summary.get("n_structures"):
+        click.echo(f"Mean recall@5: {summary.get('mean_recall_at_5', 0):.3f}")
+        click.echo(f"Mean anchor avoidance@5: {summary.get('mean_anchor_avoidance_at_5', 0):.3f}")
+
+
+@main.command("ml-train")
+@click.option("--manifest", "manifest_path", default=None)
+@click.option("--download/--no-download", default=False)
+@click.option("--model", "model_type", default="logistic", type=click.Choice(["logistic", "xgboost"]))
+@click.option("--out", "out_json", default="ml_cv_report.json", show_default=True)
+def ml_train_cmd(manifest_path, download, model_type, out_json):
+    """Build training data from benchmark manifest and run grouped CV."""
+    predictor = HotspotPredictor()
+    df = predictor.build_ml_training_frame(manifest_path, download=download)
+    if df.empty:
+        raise click.ClickException("No training rows produced. Try --download or check manifest paths.")
+
+    from pmhc_hotspot.ml.train import train_cv
+
+    report = train_cv(df, model_type=model_type)
+    with open(out_json, "w") as fh:
+        json.dump(report, fh, indent=2)
+    click.echo(f"Training rows: {report['n_rows']} (positives: {report['n_positive']})")
+    click.echo(f"Overall ROC-AUC: {report['overall']['roc_auc']:.3f}")
+    click.echo(f"Wrote {out_json}")
+
+
 if __name__ == "__main__":
     main()

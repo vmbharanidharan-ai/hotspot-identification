@@ -163,6 +163,7 @@ class HotspotPredictor:
             eligible = row["aa"] not in {"G", "P"} and not (
                 position_1based in anchor_positions and row["is_buried"]
             )
+            low_conf = ConfidenceScorer.is_low_confidence(row["confidence"])
 
             residue_scores.append(
                 ResidueScore(
@@ -188,6 +189,7 @@ class HotspotPredictor:
                     tcr_exposure_prior=row["tcr_exposure_prior"],
                     is_anchor=row["is_anchor"],
                     is_buried=row["is_buried"],
+                    low_confidence=low_conf,
                     eligible_for_hotspot=eligible,
                     explanation=explanation,
                 )
@@ -237,3 +239,31 @@ class HotspotPredictor:
                 ),
             },
         )
+
+    def _load_structure_for_benchmark(self, pdb_path: str):
+        """Load structure without predictor result cache (benchmark labels)."""
+        return self._loader.load(pdb_path)
+
+    def benchmark(
+        self,
+        manifest_path: str | None = None,
+        *,
+        top_k: tuple[int, ...] = (1, 3, 5),
+        download: bool = False,
+        cache_dir: str = "data/pdb",
+    ) -> dict:
+        """Run benchmark over curated TCR-bound pMHC structures."""
+        from pmhc_hotspot.benchmark.runner import BenchmarkRunner
+
+        return BenchmarkRunner(self).run_manifest(
+            manifest_path,
+            top_k=top_k,
+            download=download,
+            cache_dir=cache_dir,
+        )
+
+    def build_ml_training_frame(self, manifest_path: str | None = None, *, download: bool = True):
+        """Build residue-level ML training data from benchmark structures."""
+        from pmhc_hotspot.ml.dataset import build_training_dataset
+
+        return build_training_dataset(manifest_path, download=download)

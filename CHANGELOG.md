@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-06-25
+
+- Benchmark runner over 15 curated TCR-bound pMHC structures (Biopython PDBList download)
+- TCR-contact recovery, anchor avoidance, and patch contiguity metrics
+- Optional ML scaffold: feature matrix, XGBoost/logistic pipelines, grouped CV training
+- `low_confidence` residue flag for cleaner ML labels
+- CLI: `benchmark`, `ml-train`
+- PyPI/conda-forge publishing docs and GitHub Actions CI/release workflows
+
 ## 0.1.0 — 2026-06-25
 
 Initial public release.
