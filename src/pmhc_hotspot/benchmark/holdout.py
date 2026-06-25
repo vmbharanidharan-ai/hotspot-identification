@@ -57,9 +57,7 @@ def run_leave_structures_out(
     if save_model_path:
         save_staged_bundle(save_model_path, bundle)
 
-    manifest = (
-        BenchmarkManifest.default() if manifest_path is None else BenchmarkManifest(manifest_path)
-    )
+    manifest = BenchmarkManifest.resolve(manifest_path)
     entries = [e for e in manifest if e.pdb_id.upper() in held_out]
     if download:
         entries = PDBDownloader(cache_dir).ensure_manifest_paths(entries)

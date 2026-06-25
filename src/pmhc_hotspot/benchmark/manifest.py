@@ -64,3 +64,29 @@ class BenchmarkManifest:
     def default(cls) -> "BenchmarkManifest":
         bundled = Path(__file__).parent / "tcr_pmhc_manifest.yaml"
         return cls(bundled)
+
+    @classmethod
+    def resolve(cls, manifest_path: str | Path | None = None) -> "BenchmarkManifest":
+        """
+        Load the bundled manifest when path is None; otherwise resolve a user path.
+
+        Relative paths are resolved against the current working directory. If not
+        found, ``tcr_pmhc_manifest.yaml`` is also checked next to this module
+        (supports ``--manifest tcr_pmhc_manifest.yaml`` from any cwd).
+        """
+        if manifest_path is None:
+            return cls.default()
+
+        path = Path(manifest_path)
+        if path.is_file():
+            return cls(path)
+
+        by_name = Path(__file__).parent / path.name
+        if by_name.is_file():
+            return cls(by_name)
+
+        raise FileNotFoundError(
+            f"Benchmark manifest not found: {path} (cwd={Path.cwd()}). "
+            "Omit --manifest to use the bundled default, cd to the repo root, "
+            "or pass an absolute path."
+        )

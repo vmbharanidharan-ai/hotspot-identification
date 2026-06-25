@@ -36,11 +36,7 @@ class BenchmarkRunner:
         scoring_mode: str = "deterministic",
         ml_bundle: StagedModelBundle | str | Path | None = None,
     ) -> dict:
-        manifest = (
-            BenchmarkManifest.default()
-            if manifest_path is None
-            else BenchmarkManifest(manifest_path)
-        )
+        manifest = BenchmarkManifest.resolve(manifest_path)
         if isinstance(ml_bundle, (str, Path)):
             ml_bundle = load_staged_bundle(ml_bundle)
         elif ml_bundle is None:

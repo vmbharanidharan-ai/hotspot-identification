@@ -9,6 +9,11 @@ def test_default_manifest_has_structures():
     assert len(manifest) >= 11
 
 
+def test_resolve_manifest_by_filename():
+    manifest = BenchmarkManifest.resolve("tcr_pmhc_manifest.yaml")
+    assert len(manifest) >= 11
+
+
 def test_evaluate_structure_metrics():
     ev = evaluate_structure(
         pdb_id="TEST",

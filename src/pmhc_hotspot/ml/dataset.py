@@ -22,9 +22,7 @@ def build_training_dataset(
     """Aggregate residue-level training rows from a benchmark manifest."""
     import pandas as pd
 
-    manifest = (
-        BenchmarkManifest.default() if manifest_path is None else BenchmarkManifest(manifest_path)
-    )
+    manifest = BenchmarkManifest.resolve(manifest_path)
     entries = list(manifest)
     if download:
         entries = PDBDownloader(cache_dir).ensure_manifest_paths(entries)
