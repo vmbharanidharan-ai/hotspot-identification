@@ -20,6 +20,7 @@ def build_training_frame(
         rows.append(
             {
                 "pdb_id": pdb_id,
+                "peptide": prediction_result.peptide_sequence,
                 "allele": allele,
                 "peptide_length": peptide_length or prediction_result.peptide_length,
                 "position": r.position,

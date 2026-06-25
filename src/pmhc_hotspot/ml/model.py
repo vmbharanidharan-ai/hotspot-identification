@@ -74,3 +74,23 @@ def build_pipeline(
         )
 
     return Pipeline([("preprocess", preprocessor), ("model", estimator)])
+
+
+def build_base_estimator(model_type: str = "xgboost", random_state: int = 42):
+    """Build a standalone estimator for peptide-level pretraining."""
+    if model_type == "xgboost":
+        if not HAS_XGB:
+            raise ImportError('Install the ML extra: pip install -e ".[ml]"')
+        return XGBClassifier(
+            n_estimators=300,
+            learning_rate=0.05,
+            max_depth=4,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_lambda=1.0,
+            objective="binary:logistic",
+            eval_metric="logloss",
+            random_state=random_state,
+            n_jobs=1,
+        )
+    return LogisticRegression(max_iter=2000, class_weight="balanced", random_state=random_state)

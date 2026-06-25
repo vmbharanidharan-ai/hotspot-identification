@@ -21,6 +21,12 @@ jobs:
         run: pip install -e ".[dev,ml]"
       - name: Run tests
         run: pytest --cov=pmhc_hotspot --cov-report=term-missing
+      - name: CLI smoke test
+        run: pmhc-hotspot --help
+      - name: License audit (dependencies)
+        run: |
+          pip install pip-licenses
+          pip-licenses --format=markdown --with-urls
 
   build:
     runs-on: ubuntu-latest

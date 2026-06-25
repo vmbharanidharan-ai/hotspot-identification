@@ -1,5 +1,5 @@
 {% set name = "pmhc-hotspot" %}
-{% set version = "0.2.0" %}
+{% set version = "0.3.0" %}
 
 package:
   name: {{ name|lower }}
@@ -10,37 +10,43 @@ source:
 
 build:
   noarch: python
+  number: 0
   script: {{ PYTHON }} -m pip install . -vv
+  entry_points:
+    - pmhc-hotspot = pmhc_hotspot.cli:main
 
 requirements:
   host:
-    - python >=3.9
+    - python >=3.9,<3.13
     - pip
-    - hatchling >=1.25
+    - hatchling >=1.25,<2
   run:
-    - python >=3.9
-    - numpy >=1.26
-    - scipy >=1.11
-    - pandas >=2.0
-    - biopython >=1.83
-    - pyyaml >=6.0
-    - click >=8.1
+    - python >=3.9,<3.13
+    - numpy >=1.26,<2
+    - scipy >=1.11,<2
+    - pandas >=2.0,<3
+    - biopython >=1.83,<2
+    - pyyaml >=6.0,<7
+    - click >=8.1,<9
 
 test:
   imports:
     - pmhc_hotspot
     - pmhc_hotspot.benchmark
+    - pmhc_hotspot.data
   commands:
+    - pmhc-hotspot --help
     - pytest -q
 
 about:
   home: https://github.com/vmbharanidharan-ai/hotspot-identification
   license: MIT
   license_family: MIT
+  license_file: LICENSE
   summary: Structure-aware hotspot selection for peptide-MHC binder design
   description: |
     pmhc-hotspot selects biologically meaningful hotspot residues on peptide-MHC
-    complexes for RFdiffusion PPI binder design. Optional ML extras are published
-    separately via pip install pmhc-hotspot[ml].
+    complexes for RFdiffusion PPI binder design. Optional ML extras install via
+    pip install pmhc-hotspot[ml] and are not required for the base conda package.
   doc_url: https://github.com/vmbharanidharan-ai/hotspot-identification
   dev_url: https://github.com/vmbharanidharan-ai/hotspot-identification

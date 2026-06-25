@@ -1,0 +1,9 @@
+peptide_sequence,mhc_allele,qualitative_measure,reference_id,assay_type,measurement_value,pdb_id
+GILGFVFTL,HLA-A*02:01,Positive,ref001,binding,50.0,1BD2
+NLVPMVATV,HLA-A*02:01,Negative,ref002,binding,5000.0,
+YMLDLQPETT,HLA-A*24:02,Positive,ref003,binding,120.0,2VLJ
+FLPSDFFPSV,HLA-A*02:01,Negative,ref004,binding,8000.0,
+GLCTLVAML,HLA-A*02:01,Positive,ref005,binding,80.0,2C5L
+IVTDFSVIK,HLA-A*02:01,Negative,ref006,binding,12000.0,
+ELAGIGILTV,HLA-A*02:01,Positive,ref007,binding,30.0,3GHW
+SLLMWITQC,HLA-A*02:01,Negative,ref008,binding,9000.0,

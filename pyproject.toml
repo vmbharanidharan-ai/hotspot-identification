@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pmhc-hotspot"
-version = "0.2.0"
+version = "0.3.0"
 description = "Structure- and immunology-informed hotspot selection for peptide-MHC binder design"
 readme = "README.md"
 license = "MIT"
@@ -31,18 +31,18 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
-    "biopython>=1.83",
-    "click>=8.1",
-    "numpy>=1.26",
-    "pandas>=2.0",
-    "pyyaml>=6.0",
-    "scipy>=1.11",
+    "biopython>=1.83,<2",
+    "click>=8.1,<9",
+    "numpy>=1.26,<2",
+    "pandas>=2.0,<3",
+    "pyyaml>=6.0,<7",
+    "scipy>=1.11,<2",
 ]
 
 [project.optional-dependencies]
 ml = [
-    "scikit-learn>=1.4",
-    "xgboost>=2.0",
+    "scikit-learn>=1.4,<2",
+    "xgboost>=2.0,<3",
 ]
 benchmark = []
 dev = [

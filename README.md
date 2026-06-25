@@ -319,16 +319,30 @@ print(report["summary"])
 
 Metrics per structure: recall@k, precision@k, anchor avoidance@k, patch contiguity@k, stratified by peptide length (8–9, 10–11, 12+).
 
-### Optional ML layer
+### Optional ML layer (two-stage)
+
+**Stage 1 — public pretraining** (IEDB/ATLAS-style CSV exports you provide):
 
 ```bash
 pip install -e ".[ml]"
-pmhc-hotspot ml-train --download --model logistic --out ml_cv_report.json
+pmhc-hotspot ml-pretrain --iedb exports/iedb.csv --atlas exports/atlas.csv
 ```
 
-Training uses **GroupKFold by PDB** to avoid structure leakage. Low-confidence residues are excluded from training rows.
+**Stage 2 — structural fine-tuning** (TCR-contact residue labels from curated PDBs):
 
-See [docs/PUBLISHING.md](docs/PUBLISHING.md) for PyPI and conda-forge release steps.
+```bash
+pmhc-hotspot ml-fine-tune --manifest path/to/manifest.yaml --iedb exports/iedb.csv --download
+```
+
+**Full staged pipeline:**
+
+```bash
+pmhc-hotspot ml-staged --iedb exports/iedb.csv --download
+```
+
+Public binding labels are **pretraining signal only** — not residue-level TCR-contact truth. Structural fine-tuning uses separate grouped CV by PDB ID.
+
+See [docs/PUBLISHING.md](docs/PUBLISHING.md) for PyPI/conda-forge release steps and [NOTICE](NOTICE) for licensing notes.
 
 ---
 

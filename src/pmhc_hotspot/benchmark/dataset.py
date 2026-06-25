@@ -11,6 +11,7 @@ from scipy.spatial.distance import cdist
 
 from pmhc_hotspot.benchmark.manifest import BenchmarkEntry
 from pmhc_hotspot.constants import CONTACT_CUTOFF_A
+from pmhc_hotspot.data.validation import safe_cache_path, validate_pdb_id
 from pmhc_hotspot.features.positioning import PeptideResidueMap
 from pmhc_hotspot.io import chain_ca_residues, get_chain, infer_peptide_hla_chains
 
@@ -26,10 +27,11 @@ class PDBDownloader:
         self._pdbl = PDBList()
 
     def pdb_path(self, pdb_id: str) -> Path:
-        return self.cache_dir / f"{pdb_id.upper()}.pdb"
+        pdb_id = validate_pdb_id(pdb_id)
+        return safe_cache_path(self.cache_dir, f"{pdb_id}.pdb")
 
     def download(self, pdb_id: str) -> Path:
-        pdb_id = pdb_id.upper()
+        pdb_id = validate_pdb_id(pdb_id)
         out = self.pdb_path(pdb_id)
         if out.exists() and out.stat().st_size > 0:
             return out

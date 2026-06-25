@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 — 2026-06-25
+
+- Two-stage ML: public IEDB/ATLAS pretraining + structural fine-tuning
+- `data/public_datasets.py` with validated CSV loaders (user-provided exports only)
+- `ml/pretrain.py`, `ml/fine_tune.py`, `ml/hybrid.py`, `ml/staged.py`
+- CLI: `ml-pretrain`, `ml-fine-tune`, `ml-staged`
+- Safer PDB downloads (ID validation, cache path checks)
+- Pinned dependencies, NOTICE file, environment-lock.yml, conda CLI test
+
 ## 0.2.0 — 2026-06-25
 
 - Benchmark runner over 15 curated TCR-bound pMHC structures (Biopython PDBList download)

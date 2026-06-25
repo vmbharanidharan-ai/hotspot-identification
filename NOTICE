@@ -1,0 +1,14 @@
+pmhc-hotspot
+Copyright (c) 2026 Vedha Bharanidharan
+
+This project is licensed under the MIT License. See LICENSE for the full text.
+
+Third-party dependencies are listed in pyproject.toml and conda/meta.yaml.
+Run `pip install pip-licenses` and `pip-licenses --format=markdown` in a clean
+environment to audit dependency licenses before publication.
+
+AI-assisted scaffolding was used during development. All code was reviewed,
+tested, and is the responsibility of the package maintainers.
+
+Public datasets (IEDB, ATLAS) are loaded from user-provided exports only.
+The package does not redistribute IEDB or ATLAS data.
