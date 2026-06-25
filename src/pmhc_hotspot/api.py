@@ -21,6 +21,7 @@ from pmhc_hotspot.io import (
     infer_peptide_hla_chains,
     residue_aa1,
 )
+from pmhc_hotspot.ml.persistence import StagedModelBundle, load_staged_bundle
 from pmhc_hotspot.scoring.baseline import HotspotScorer
 from pmhc_hotspot.scoring.calibration import minmax_normalize
 from pmhc_hotspot.scoring.patches import PatchSelector
@@ -46,6 +47,8 @@ class HotspotPredictor:
         peptide_chain: str | None = None,
         hla_chain: str | None = None,
         hotspot_config: dict | None = None,
+        ml_bundle: StagedModelBundle | str | Path | None = None,
+        scoring_mode: str = "deterministic",
     ):
         self.allele = normalize_allele(allele)
         self.mutation_positions = mutation_positions or []
@@ -53,6 +56,11 @@ class HotspotPredictor:
         self.peptide_chain = peptide_chain
         self.hla_chain = hla_chain
         self.hotspot_config = {**DEFAULT_HOTSPOT_CONFIG, **(hotspot_config or {})}
+        self.scoring_mode = scoring_mode
+        if isinstance(ml_bundle, (str, Path)):
+            self.ml_bundle = load_staged_bundle(ml_bundle)
+        else:
+            self.ml_bundle = ml_bundle
 
         self._loader = StructureLoader()
         self._validator = StructureValidator()
@@ -160,9 +168,7 @@ class HotspotPredictor:
                 relative_sasa=features["sasa"],
             )
 
-            eligible = row["aa"] not in {"G", "P"} and not (
-                position_1based in anchor_positions and row["is_buried"]
-            )
+            eligible = row["aa"] not in {"G", "P"}
             low_conf = ConfidenceScorer.is_low_confidence(row["confidence"])
 
             residue_scores.append(
@@ -195,7 +201,33 @@ class HotspotPredictor:
                 )
             )
 
-        residue_scores_sorted = sorted(residue_scores, key=lambda r: r.score, reverse=True)
+        if self.scoring_mode != "deterministic" and self.ml_bundle is not None:
+            from pmhc_hotspot.ml.inference import blend_residue_scores, predict_residue_probabilities
+
+            temp_result = PredictionResult(
+                allele=self.allele,
+                peptide_chain_id=pep_id,
+                hla_chain_ids=hla_ids,
+                peptide_sequence=prm.sequence,
+                peptide_length=prm.length,
+                residue_scores=residue_scores,
+                hotspots=[],
+                patches=[],
+                rfdiffusion_hotspot_res="",
+                contig_template="",
+                metadata={},
+            )
+            ml_probs = predict_residue_probabilities(temp_result, self.ml_bundle)
+            ranked = blend_residue_scores(
+                residue_scores,
+                ml_probs,
+                scoring_mode=self.scoring_mode,
+                hybrid_alpha=self.ml_bundle.hybrid_alpha,
+            )
+            ranked.sort(key=lambda item: (-item[1], item[0].position_index))
+            residue_scores_sorted = [r for r, _ in ranked]
+        else:
+            residue_scores_sorted = sorted(residue_scores, key=lambda r: r.score, reverse=True)
 
         patch_selector = PatchSelector(
             min_patch_size=self.hotspot_config["min_patch_size"],
@@ -236,7 +268,9 @@ class HotspotPredictor:
                 "structure_path": path,
                 "anchor_positions": sorted(anchor_positions),
                 "preferred_tcr_positions": preferred_positions,
-                "method": "pmhc-hotspot deterministic baseline v0.1.0",
+                "scoring_mode": self.scoring_mode,
+                "ml_bundle_loaded": self.ml_bundle is not None,
+                "method": f"pmhc-hotspot {self.scoring_mode} v0.3.0",
                 "disclaimer": (
                     "Heuristic design prioritization; not T-cell activation prediction"
                 ),
@@ -255,20 +289,36 @@ class HotspotPredictor:
         download: bool = False,
         cache_dir: str = "data/pdb",
         contact_mode: str = "standard",
+        scoring_mode: str | None = None,
+        ml_bundle: StagedModelBundle | str | Path | None = None,
     ) -> dict:
         """Run benchmark over curated TCR-bound pMHC structures."""
         from pmhc_hotspot.benchmark.runner import BenchmarkRunner
 
+        mode = scoring_mode or self.scoring_mode
+        bundle = ml_bundle if ml_bundle is not None else self.ml_bundle
         return BenchmarkRunner(self).run_manifest(
             manifest_path,
             top_k=top_k,
             download=download,
             cache_dir=cache_dir,
             contact_mode=contact_mode,
+            scoring_mode=mode,
+            ml_bundle=bundle,
         )
 
-    def build_ml_training_frame(self, manifest_path: str | None = None, *, download: bool = True):
+    def build_ml_training_frame(
+        self,
+        manifest_path: str | None = None,
+        *,
+        download: bool = True,
+        contact_mode: str = "standard",
+    ):
         """Build residue-level ML training data from benchmark structures."""
         from pmhc_hotspot.ml.dataset import build_training_dataset
 
-        return build_training_dataset(manifest_path, download=download)
+        return build_training_dataset(
+            manifest_path,
+            download=download,
+            contact_mode=contact_mode,
+        )

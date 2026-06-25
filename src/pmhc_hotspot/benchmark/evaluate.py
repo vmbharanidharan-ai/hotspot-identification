@@ -17,6 +17,7 @@ class StructureEvaluation:
     recall_at_k: dict[int, float] = field(default_factory=dict)
     precision_at_k: dict[int, float] = field(default_factory=dict)
     anchor_avoidance_at_k: dict[int, float] = field(default_factory=dict)
+    buried_anchor_avoidance_at_k: dict[int, float] = field(default_factory=dict)
     patch_contiguity_at_k: dict[int, float] = field(default_factory=dict)
     truth_positions: list[str] = field(default_factory=list)
     predicted_top5: list[str] = field(default_factory=list)
@@ -36,6 +37,7 @@ def evaluate_structure(
     allele: str | None,
     peptide_length: int,
     top_k: tuple[int, ...] = (1, 3, 5),
+    buried_anchor_positions: set[str] | None = None,
 ) -> StructureEvaluation:
     norm_allele = normalize_allele(allele)
     anchor_positions = {
@@ -69,6 +71,12 @@ def evaluate_structure(
             {int(p.lstrip("P")) for p in top_preds},
             anchor_numeric,
         )
+        if buried_anchor_positions:
+            buried_numeric = {int(p.lstrip("P")) for p in buried_anchor_positions}
+            ev.buried_anchor_avoidance_at_k[k] = HotspotEvaluator.anchor_avoidance(
+                {int(p.lstrip("P")) for p in top_preds},
+                buried_numeric,
+            )
         ev.patch_contiguity_at_k[k] = HotspotEvaluator.patch_contiguity(pred_indices)
 
     return ev
@@ -91,6 +99,7 @@ def aggregate_results(results: list[StructureEvaluation]) -> dict:
         "mean_recall_at_5": mean_metric("recall_at_k", 5),
         "mean_precision_at_5": mean_metric("precision_at_k", 5),
         "mean_anchor_avoidance_at_5": mean_metric("anchor_avoidance_at_k", 5),
+        "mean_buried_anchor_avoidance_at_5": mean_metric("buried_anchor_avoidance_at_k", 5),
         "mean_patch_contiguity_at_5": mean_metric("patch_contiguity_at_k", 5),
     }
 

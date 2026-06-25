@@ -159,3 +159,30 @@ class AnchorFilter:
         if relative_sasa > 0.4:
             return suppression * 0.3
         return suppression * 0.6
+
+    def selection_multiplier(
+        self,
+        position_1based: int,
+        peptide_length: int,
+        *,
+        buried: bool,
+        relative_sasa: float,
+    ) -> float:
+        """
+        Soft down-weight for hotspot ranking in [0.15, 1.0].
+
+        Anchors are deprioritized, not hard-excluded. Longer peptides get
+        slightly softer anchor down-weighting.
+        """
+        penalty = self.penalty(
+            position_1based,
+            peptide_length,
+            buried=buried,
+            relative_sasa=relative_sasa,
+        )
+        if penalty <= 0.0:
+            return 1.0
+        multiplier = 1.0 - penalty
+        if peptide_length >= 10:
+            multiplier = min(1.0, multiplier + 0.15)
+        return max(0.15, multiplier)

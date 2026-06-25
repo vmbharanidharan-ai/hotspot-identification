@@ -10,7 +10,7 @@ from pmhc_hotspot.constants import (
     RESIDUE_CHEMICAL_SCORE,
     SKIP_ALWAYS,
 )
-from pmhc_hotspot.features.allele_rules import get_anchor_positions
+from pmhc_hotspot.features.allele_rules import AnchorFilter
 from pmhc_hotspot.types import ResidueScore
 
 logger = logging.getLogger(__name__)
@@ -39,13 +39,26 @@ def _position_eligible(
     *,
     allow_n_terminal_small: bool = False,
 ) -> bool:
-    if position_1based in get_anchor_positions(allele, peptide_length):
-        return False
     if aa in SKIP_ALWAYS:
         return False
     if position_1based == 1 and aa in {"A", "G"} and not allow_n_terminal_small:
         return False
     return True
+
+
+def _anchor_rank_multiplier(
+    residue: ResidueScore,
+    peptide_length: int,
+    allele: str | None,
+    anchor_filter: AnchorFilter,
+) -> float:
+    position_1based = residue.position_index + 1
+    return anchor_filter.selection_multiplier(
+        position_1based,
+        peptide_length,
+        buried=residue.is_buried,
+        relative_sasa=residue.relative_sasa,
+    )
 
 
 def select_rfdiffusion_hotspots(
@@ -60,7 +73,7 @@ def select_rfdiffusion_hotspots(
     Select 3-6 RFdiffusion hotspots with biological design constraints.
 
     Rules (from pMHC binder design literature and RFdiffusion PPI practice):
-    - Skip MHC-I anchor positions (allele-aware)
+    - Softly down-weight MHC-I anchor positions (allele-aware; not hard-excluded)
     - Skip Pro/Gly; skip N-terminal Ala/Gly (flexible, low contact area)
     - Prefer high-scoring TCR-facing central residues
     - Prefer >= min_hydrophobic hydrophobic residues (scaled down for smaller sets)
@@ -75,12 +88,15 @@ def select_rfdiffusion_hotspots(
     if not preferred:
         preferred = {i + 1 for i in range(3, peptide_length)}
 
+    anchor_filter = AnchorFilter(allele)
     candidates: list[tuple[float, ResidueScore]] = []
     for r in residue_scores:
-        if not _position_eligible(r.position_index + 1, r.aa, peptide_length, allele):
+        position_1based = r.position_index + 1
+        if not _position_eligible(position_1based, r.aa, peptide_length, allele):
             continue
         chem = RESIDUE_CHEMICAL_SCORE.get(r.aa, 0.0) / 10.0
         combined = 0.85 * r.score + 0.15 * chem
+        combined *= _anchor_rank_multiplier(r, peptide_length, allele, anchor_filter)
         candidates.append((combined, r))
 
     if not candidates:

@@ -167,15 +167,34 @@ def validate_cmd(structure_path, peptide_chain, hla_chain):
     type=click.Choice(["strict", "standard", "permissive"]),
     help="TCR-contact ground-truth definition for benchmark labels",
 )
+@click.option(
+    "--scoring-mode",
+    default="deterministic",
+    show_default=True,
+    type=click.Choice(["deterministic", "ml", "hybrid"]),
+    help="Residue ranking mode for benchmark evaluation",
+)
+@click.option(
+    "--ml-bundle",
+    default=None,
+    type=click.Path(exists=True),
+    help="Saved staged model bundle (.joblib) for ml/hybrid scoring",
+)
 @click.option("--out", "out_json", default="benchmark_report.json", show_default=True)
-def benchmark_cmd(manifest_path, allele, download, cache_dir, contact_mode, out_json):
+def benchmark_cmd(
+    manifest_path, allele, download, cache_dir, contact_mode, scoring_mode, ml_bundle, out_json
+):
     """Run TCR-contact recovery benchmark over curated structures."""
-    predictor = HotspotPredictor(allele=allele)
+    if scoring_mode in {"ml", "hybrid"} and not ml_bundle:
+        raise click.ClickException("--ml-bundle is required when --scoring-mode is ml or hybrid")
+    predictor = HotspotPredictor(allele=allele, ml_bundle=ml_bundle, scoring_mode=scoring_mode)
     report = predictor.benchmark(
         manifest_path,
         download=download,
         cache_dir=cache_dir,
         contact_mode=contact_mode,
+        scoring_mode=scoring_mode,
+        ml_bundle=ml_bundle,
     )
     _write_json(out_json, report, indent=2)
     click.echo(f"Wrote {out_json}")
@@ -183,19 +202,32 @@ def benchmark_cmd(manifest_path, allele, download, cache_dir, contact_mode, out_
     click.echo(f"Structures evaluated: {summary.get('n_structures', 0)}")
     if summary.get("n_structures"):
         click.echo(f"Contact mode: {report.get('contact_mode', contact_mode)}")
+        click.echo(f"Scoring mode: {report.get('scoring_mode', scoring_mode)}")
         click.echo(f"Mean recall@5: {summary.get('mean_recall_at_5', 0):.3f}")
         click.echo(f"Mean anchor avoidance@5: {summary.get('mean_anchor_avoidance_at_5', 0):.3f}")
+        buried = summary.get("mean_buried_anchor_avoidance_at_5")
+        if buried == buried:
+            click.echo(f"Mean buried-anchor avoidance@5: {buried:.3f}")
 
 
 @main.command("ml-train")
 @click.option("--manifest", "manifest_path", default=None)
 @click.option("--download/--no-download", default=False)
 @click.option("--model", "model_type", default="logistic", type=click.Choice(["logistic", "xgboost"]))
+@click.option(
+    "--contact-mode",
+    default="standard",
+    show_default=True,
+    type=click.Choice(["strict", "standard", "permissive"]),
+    help="TCR-contact label definition when building training rows",
+)
 @click.option("--out", "out_json", default="ml_cv_report.json", show_default=True)
-def ml_train_cmd(manifest_path, download, model_type, out_json):
+def ml_train_cmd(manifest_path, download, model_type, contact_mode, out_json):
     """Build training data from benchmark manifest and run grouped CV."""
     predictor = HotspotPredictor()
-    df = predictor.build_ml_training_frame(manifest_path, download=download)
+    df = predictor.build_ml_training_frame(
+        manifest_path, download=download, contact_mode=contact_mode
+    )
     if df.empty:
         raise click.ClickException("No training rows produced. Try --download or check manifest paths.")
 
@@ -239,8 +271,16 @@ def ml_pretrain_cmd(iedb_path, atlas_path, model_type, out_json):
 @click.option("--iedb", "iedb_path", type=click.Path(exists=True), default=None)
 @click.option("--atlas", "atlas_path", type=click.Path(exists=True), default=None)
 @click.option("--model", "model_type", default="logistic", type=click.Choice(["logistic", "xgboost"]))
+@click.option(
+    "--contact-mode",
+    default="standard",
+    show_default=True,
+    type=click.Choice(["strict", "standard", "permissive"]),
+)
 @click.option("--out", "out_json", default="finetune_report.json", show_default=True)
-def ml_fine_tune_cmd(manifest_path, download, iedb_path, atlas_path, model_type, out_json):
+def ml_fine_tune_cmd(
+    manifest_path, download, iedb_path, atlas_path, model_type, contact_mode, out_json
+):
     """Stage 2: fine-tune on structural TCR-contact residue labels."""
     from pmhc_hotspot.api import HotspotPredictor
     from pmhc_hotspot.data.public_datasets import combine_public_datasets, load_atlas_csv, load_iedb_csv
@@ -248,7 +288,9 @@ def ml_fine_tune_cmd(manifest_path, download, iedb_path, atlas_path, model_type,
     from pmhc_hotspot.ml.pretrain import fit_public_pretrain_model
 
     predictor = HotspotPredictor()
-    structural = predictor.build_ml_training_frame(manifest_path, download=download)
+    structural = predictor.build_ml_training_frame(
+        manifest_path, download=download, contact_mode=contact_mode
+    )
     if structural.empty:
         raise click.ClickException("No structural training rows produced")
 
@@ -275,33 +317,152 @@ def ml_fine_tune_cmd(manifest_path, download, iedb_path, atlas_path, model_type,
 
 
 @main.command("ml-staged")
-@click.option("--iedb", "iedb_path", type=click.Path(exists=True), required=True)
+@click.option("--iedb", "iedb_path", type=click.Path(exists=True), default=None)
 @click.option("--atlas", "atlas_path", type=click.Path(exists=True), default=None)
 @click.option("--manifest", "manifest_path", default=None)
 @click.option("--download/--no-download", default=False)
 @click.option("--model", "model_type", default="logistic", type=click.Choice(["logistic", "xgboost"]))
+@click.option(
+    "--contact-mode",
+    default="standard",
+    show_default=True,
+    type=click.Choice(["strict", "standard", "permissive"]),
+)
+@click.option(
+    "--save-model",
+    default=None,
+    type=click.Path(),
+    help="Write staged model bundle (.joblib) for inference/benchmark",
+)
+@click.option("--no-pretrain", is_flag=True, help="Skip stage-1 public pretrain (ablation)")
 @click.option("--out", "out_json", default="staged_training_report.json", show_default=True)
-def ml_staged_cmd(iedb_path, atlas_path, manifest_path, download, model_type, out_json):
+def ml_staged_cmd(
+    iedb_path,
+    atlas_path,
+    manifest_path,
+    download,
+    model_type,
+    contact_mode,
+    save_model,
+    no_pretrain,
+    out_json,
+):
     """Run full two-stage training: public pretrain then structural fine-tune."""
     from pmhc_hotspot.api import HotspotPredictor
     from pmhc_hotspot.data.public_datasets import combine_public_datasets, load_atlas_csv, load_iedb_csv
+    from pmhc_hotspot.ml.persistence import save_staged_bundle
     from pmhc_hotspot.ml.staged import run_staged_training
 
-    frames = [load_iedb_csv(iedb_path)]
-    if atlas_path:
-        frames.append(load_atlas_csv(atlas_path))
-    public_df = combine_public_datasets(frames)
-    structural_df = HotspotPredictor().build_ml_training_frame(manifest_path, download=download)
-    report = run_staged_training(public_df, structural_df, model_type=model_type)
+    public_df = None
+    if not no_pretrain:
+        if not iedb_path:
+            raise click.ClickException("--iedb is required unless --no-pretrain is set")
+        frames = [load_iedb_csv(iedb_path)]
+        if atlas_path:
+            frames.append(load_atlas_csv(atlas_path))
+        public_df = combine_public_datasets(frames)
+    else:
+        import pandas as pd
+
+        public_df = pd.DataFrame()
+
+    structural_df = HotspotPredictor().build_ml_training_frame(
+        manifest_path, download=download, contact_mode=contact_mode
+    )
+    report = run_staged_training(
+        public_df,
+        structural_df,
+        model_type=model_type,
+        contact_mode=contact_mode,
+        use_pretrain=not no_pretrain,
+    )
+    if save_model:
+        save_staged_bundle(save_model, report["model_bundle"])
+        click.echo(f"Saved model bundle: {save_model}")
+
     serializable = {
         "pretrain_cv": report["pretrain_cv"],
         "finetune_cv": report["finetune_cv"],
         "n_public_rows": report["n_public_rows"],
         "n_structural_rows": report["n_structural_rows"],
+        "contact_mode": report["contact_mode"],
+        "use_pretrain": report["use_pretrain"],
+        "model_saved": bool(save_model),
     }
     _write_json(out_json, serializable, indent=2, default=str)
-    click.echo(f"Pretrain ROC-AUC: {report['pretrain_cv']['roc_auc']:.3f}")
+    if report["pretrain_cv"]:
+        click.echo(f"Pretrain ROC-AUC: {report['pretrain_cv']['roc_auc']:.3f}")
     click.echo(f"Finetune ROC-AUC: {report['finetune_cv']['overall']['roc_auc']:.3f}")
+    click.echo(f"Wrote {out_json}")
+
+
+@main.command("ml-holdout")
+@click.option("--iedb", "iedb_path", type=click.Path(exists=True), required=True)
+@click.option("--atlas", "atlas_path", type=click.Path(exists=True), default=None)
+@click.option("--manifest", "manifest_path", default=None)
+@click.option("--download/--no-download", default=False)
+@click.option("--model", "model_type", default="xgboost", type=click.Choice(["logistic", "xgboost"]))
+@click.option(
+    "--contact-mode",
+    default="standard",
+    show_default=True,
+    type=click.Choice(["strict", "standard", "permissive"]),
+)
+@click.option(
+    "--scoring-mode",
+    default="hybrid",
+    show_default=True,
+    type=click.Choice(["deterministic", "ml", "hybrid"]),
+)
+@click.option(
+    "--hold-out",
+    "hold_out",
+    multiple=True,
+    required=True,
+    help="PDB IDs to exclude from training and evaluate (repeatable)",
+)
+@click.option("--save-model", default=None, type=click.Path())
+@click.option("--out", "out_json", default="holdout_report.json", show_default=True)
+def ml_holdout_cmd(
+    iedb_path,
+    atlas_path,
+    manifest_path,
+    download,
+    model_type,
+    contact_mode,
+    scoring_mode,
+    hold_out,
+    save_model,
+    out_json,
+):
+    """Leave-structures-out validation with optional held-out benchmark."""
+    from pmhc_hotspot.api import HotspotPredictor
+    from pmhc_hotspot.benchmark.holdout import run_leave_structures_out
+    from pmhc_hotspot.data.public_datasets import combine_public_datasets, load_atlas_csv, load_iedb_csv
+
+    frames = [load_iedb_csv(iedb_path)]
+    if atlas_path:
+        frames.append(load_atlas_csv(atlas_path))
+    public_df = combine_public_datasets(frames)
+    structural_df = HotspotPredictor().build_ml_training_frame(
+        manifest_path, download=download, contact_mode=contact_mode
+    )
+    report = run_leave_structures_out(
+        public_df,
+        structural_df,
+        list(hold_out),
+        manifest_path=manifest_path,
+        model_type=model_type,
+        contact_mode=contact_mode,
+        scoring_mode=scoring_mode,
+        save_model_path=save_model,
+        download=download,
+    )
+    _write_json(out_json, report, indent=2, default=str)
+    summary = report["held_out_benchmark"]["summary"]
+    click.echo(f"Held out: {', '.join(report['held_out'])}")
+    if summary.get("n_structures"):
+        click.echo(f"Held-out recall@5 ({scoring_mode}): {summary.get('mean_recall_at_5', 0):.3f}")
     click.echo(f"Wrote {out_json}")
 
 
