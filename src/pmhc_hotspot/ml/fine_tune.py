@@ -12,6 +12,20 @@ from pmhc_hotspot.ml.pretrain import PUBLIC_CATEGORICAL, PUBLIC_FEATURE_COLUMNS
 from pmhc_hotspot.ml.train import CATEGORICAL_COLUMNS, FEATURE_COLUMNS
 
 
+def structural_feature_columns(
+    df: pd.DataFrame,
+    *,
+    use_stat_feature: bool = False,
+    use_pretrain_feature: bool = False,
+) -> list[str]:
+    cols = [c for c in FEATURE_COLUMNS + CATEGORICAL_COLUMNS if c in df.columns]
+    if use_stat_feature and "stat_prob" in df.columns and "stat_prob" not in cols:
+        cols = cols + ["stat_prob"]
+    if use_pretrain_feature and "pretrain_prob" in df.columns and "pretrain_prob" not in cols:
+        cols = cols + ["pretrain_prob"]
+    return cols
+
+
 def attach_pretrain_probabilities(structural_df: pd.DataFrame, pretrained_model) -> pd.DataFrame:
     """
     Add peptide-level pretrain probability as a residue feature.
@@ -51,6 +65,8 @@ def fine_tune_structural(
     n_splits: int = 5,
     random_state: int = 42,
     use_pretrain_feature: bool = False,
+    use_stat_feature: bool = False,
+    calibrate: bool = True,
 ) -> dict:
     """
     Fine-tune on curated structural residue labels.
@@ -58,9 +74,9 @@ def fine_tune_structural(
     Groups by PDB/complex ID to prevent leakage. Keeps structural benchmark
     splits separate from public pretraining data by design.
     """
-    feature_cols = [c for c in FEATURE_COLUMNS + CATEGORICAL_COLUMNS if c in df.columns]
-    if use_pretrain_feature and "pretrain_prob" in df.columns:
-        feature_cols = feature_cols + ["pretrain_prob"]
+    feature_cols = structural_feature_columns(
+        df, use_stat_feature=use_stat_feature, use_pretrain_feature=use_pretrain_feature
+    )
 
     X = df[feature_cols]
     y = df[label_col].astype(int)
@@ -85,6 +101,8 @@ def fine_tune_structural(
             categorical_columns=[c for c in CATEGORICAL_COLUMNS if c in feature_cols],
             model_type=model_type,
             random_state=random_state,
+            calibrate=calibrate,
+            calibration_cv=min(3, max(2, df.iloc[tr]["pdb_id"].nunique())),
         )
         pipe.fit(X.iloc[tr], y.iloc[tr])
         prob = pipe.predict_proba(X.iloc[te])[:, 1]
@@ -123,6 +141,8 @@ def fine_tune_structural(
         "n_rows": len(df),
         "n_positive": int(y.sum()),
         "use_pretrain_feature": use_pretrain_feature,
+        "use_stat_feature": use_stat_feature,
+        "calibrated": calibrate,
         "disclaimer": (
             "Structural labels are TCR-contact proxies for hotspot prioritization, "
             "not direct immunogenicity prediction."
@@ -136,15 +156,19 @@ def fit_structural_model(
     model_type: str = "logistic",
     random_state: int = 42,
     use_pretrain_feature: bool = False,
+    use_stat_feature: bool = False,
+    calibrate: bool = True,
 ):
-    feature_cols = [c for c in FEATURE_COLUMNS + CATEGORICAL_COLUMNS if c in df.columns]
-    if use_pretrain_feature and "pretrain_prob" in df.columns:
-        feature_cols = feature_cols + ["pretrain_prob"]
+    feature_cols = structural_feature_columns(
+        df, use_stat_feature=use_stat_feature, use_pretrain_feature=use_pretrain_feature
+    )
     pipe = build_pipeline(
         feature_columns=feature_cols,
         categorical_columns=[c for c in CATEGORICAL_COLUMNS if c in feature_cols],
         model_type=model_type,
         random_state=random_state,
+        calibrate=calibrate,
+        calibration_cv=min(3, max(2, df["pdb_id"].nunique())),
     )
     pipe.fit(df[feature_cols], df["label"].astype(int))
     return pipe

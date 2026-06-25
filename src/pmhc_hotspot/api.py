@@ -211,7 +211,11 @@ class HotspotPredictor:
             )
 
         if self.scoring_mode != "deterministic" and self.ml_bundle is not None:
-            from pmhc_hotspot.ml.inference import blend_residue_scores, predict_residue_probabilities
+            from pmhc_hotspot.ml.inference import (
+                blend_residue_scores,
+                predict_residue_probabilities,
+                predict_statistical_probabilities,
+            )
 
             temp_result = PredictionResult(
                 allele=self.allele,
@@ -226,11 +230,17 @@ class HotspotPredictor:
                 contig_template="",
                 metadata={},
             )
-            ml_probs = predict_residue_probabilities(temp_result, self.ml_bundle)
+            stat_probs = None
+            if self.scoring_mode in {"statistical", "hybrid"} and self.ml_bundle.statistical_model:
+                stat_probs = predict_statistical_probabilities(temp_result, self.ml_bundle)
+            ml_probs = None
+            if self.scoring_mode in {"ml", "hybrid"}:
+                ml_probs = predict_residue_probabilities(temp_result, self.ml_bundle)
             ranked = blend_residue_scores(
                 residue_scores,
                 ml_probs,
                 scoring_mode=self.scoring_mode,
+                stat_probs=stat_probs,
                 hybrid_alpha=self.ml_bundle.hybrid_alpha,
             )
             ranked.sort(key=lambda item: (-item[1], item[0].position_index))

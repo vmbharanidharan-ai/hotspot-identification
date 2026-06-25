@@ -171,7 +171,7 @@ def validate_cmd(structure_path, peptide_chain, hla_chain):
     "--scoring-mode",
     default="deterministic",
     show_default=True,
-    type=click.Choice(["deterministic", "ml", "hybrid"]),
+    type=click.Choice(["deterministic", "statistical", "ml", "hybrid"]),
     help="Residue ranking mode for benchmark evaluation",
 )
 @click.option(
@@ -185,8 +185,10 @@ def benchmark_cmd(
     manifest_path, allele, download, cache_dir, contact_mode, scoring_mode, ml_bundle, out_json
 ):
     """Run TCR-contact recovery benchmark over curated structures."""
-    if scoring_mode in {"ml", "hybrid"} and not ml_bundle:
-        raise click.ClickException("--ml-bundle is required when --scoring-mode is ml or hybrid")
+    if scoring_mode in {"ml", "hybrid", "statistical"} and not ml_bundle:
+        raise click.ClickException(
+            "--ml-bundle is required when --scoring-mode is ml, hybrid, or statistical"
+        )
     predictor = HotspotPredictor(allele=allele, ml_bundle=ml_bundle, scoring_mode=scoring_mode)
     report = predictor.benchmark(
         manifest_path,
@@ -335,6 +337,7 @@ def ml_fine_tune_cmd(
     help="Write staged model bundle (.joblib) for inference/benchmark",
 )
 @click.option("--no-pretrain", is_flag=True, help="Skip stage-1 public pretrain (ablation)")
+@click.option("--no-calibrate", is_flag=True, help="Disable Platt calibration on ML/statistical models")
 @click.option("--out", "out_json", default="staged_training_report.json", show_default=True)
 def ml_staged_cmd(
     iedb_path,
@@ -345,6 +348,7 @@ def ml_staged_cmd(
     contact_mode,
     save_model,
     no_pretrain,
+    no_calibrate,
     out_json,
 ):
     """Run full two-stage training: public pretrain then structural fine-tune."""
@@ -375,6 +379,7 @@ def ml_staged_cmd(
         model_type=model_type,
         contact_mode=contact_mode,
         use_pretrain=not no_pretrain,
+        calibrate=not no_calibrate,
     )
     if save_model:
         save_staged_bundle(save_model, report["model_bundle"])
@@ -382,17 +387,26 @@ def ml_staged_cmd(
 
     serializable = {
         "pretrain_cv": report["pretrain_cv"],
+        "statistical_cv": {
+            k: v for k, v in report["statistical_cv"].items() if k != "oof_predictions"
+        },
         "finetune_cv": report["finetune_cv"],
+        "hybrid_alpha": report["hybrid_alpha"],
         "n_public_rows": report["n_public_rows"],
         "n_structural_rows": report["n_structural_rows"],
         "contact_mode": report["contact_mode"],
         "use_pretrain": report["use_pretrain"],
+        "calibrated": report["calibrated"],
         "model_saved": bool(save_model),
     }
     _write_json(out_json, serializable, indent=2, default=str)
     if report["pretrain_cv"]:
         click.echo(f"Pretrain ROC-AUC: {report['pretrain_cv']['roc_auc']:.3f}")
+    click.echo(
+        f"Statistical ROC-AUC: {report['statistical_cv']['overall']['roc_auc']:.3f}"
+    )
     click.echo(f"Finetune ROC-AUC: {report['finetune_cv']['overall']['roc_auc']:.3f}")
+    click.echo(f"Learned hybrid α (stat vs ML): {report['hybrid_alpha']:.3f}")
     click.echo(f"Wrote {out_json}")
 
 
@@ -412,7 +426,7 @@ def ml_staged_cmd(
     "--scoring-mode",
     default="hybrid",
     show_default=True,
-    type=click.Choice(["deterministic", "ml", "hybrid"]),
+    type=click.Choice(["deterministic", "statistical", "ml", "hybrid"]),
 )
 @click.option(
     "--hold-out",

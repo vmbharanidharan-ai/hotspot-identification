@@ -95,9 +95,42 @@ def test_ml_mode_orders_by_model_probability():
     assert ordered[0] == "P5"
 
 
-def test_hybrid_blend_between_deterministic_and_ml():
+def test_hybrid_blend_between_statistical_and_ml():
     residues = [_residue(0, 0.9), _residue(1, 0.1)]
-    ml_probs = pd.Series([0.1, 0.9])
-    ranked = blend_residue_scores(residues, ml_probs, scoring_mode="hybrid", hybrid_alpha=0.3)
+    stat_probs = pd.Series([0.1, 0.9])
+    ml_probs = pd.Series([0.9, 0.1])
+    ranked = blend_residue_scores(
+        residues,
+        ml_probs,
+        scoring_mode="hybrid",
+        stat_probs=stat_probs,
+        hybrid_alpha=0.7,
+    )
     scores = {r.position: s for r, s in ranked}
     assert scores["P2"] > scores["P1"]
+
+
+def test_statistical_mode_orders_by_stat_probability():
+    residues = [_residue(i, 0.5) for i in range(3)]
+
+    class _StatModel:
+        def predict_proba(self, X):
+            import numpy as np
+
+            probs = np.array([0.2, 0.9, 0.4])
+            return np.column_stack([1 - probs, probs])
+
+    bundle = StagedModelBundle(
+        final_model=_DummyModel(),
+        statistical_model=_StatModel(),
+        stat_feature_columns=["sasa", "aa"],
+        feature_columns=["sasa", "stat_prob", "aa"],
+        categorical_columns=["aa"],
+        model_type="logistic",
+        use_pretrain_feature=False,
+        use_stat_feature=True,
+    )
+    ordered = order_positions_by_score(
+        _prediction(residues), scoring_mode="statistical", bundle=bundle
+    )
+    assert ordered[0] == "P2"

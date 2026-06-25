@@ -132,7 +132,8 @@ structure → pmhc-hotspot → ranked residues + patches + export → RFdiffusio
 
 | Component | What it does |
 |-----------|--------------|
-| TCR-contact ML | Residue-level labels from TCR-bound PDBs; staged pretrain + fine-tune |
+| Statistical scorer | Elastic-net logistic + Platt calibration on structural labels |
+| TCR-contact ML | Nonlinear layer with `stat_prob` + optional `pretrain_prob`; learned hybrid α |
 | Hotspot selection | 3–6 residues; Pro/Gly filters; scaled hydrophobic rules; soft anchor down-weight |
 | Geometry features | Protrusion, curvature, bulge — TCR-facing peptide geometry |
 | Allele biochemistry | Anchor suppression, exposure priors, chemical hierarchy |
@@ -149,8 +150,10 @@ flowchart TD
     C --> C3[Our code: protrusion, curvature, bulge]
     C --> C4[Our code: anchor rules, chemical score]
     C --> D[Score residues]
-    D --> D1[Deterministic weighted sum]
-    D --> D2[Optional ML / hybrid blend]
+    D --> D1[Deterministic heuristic]
+    D --> D2[Statistical elastic-net + calibration]
+    D --> D3[ML with stat_prob + pretrain_prob]
+    D --> D4[Hybrid: learned α blend]
     D --> E[Select 3–6 hotspots — our code]
     E --> F[Export TSV / JSON / RFdiffusion YAML]
 ```
@@ -239,7 +242,7 @@ for h in result.hotspots:
 predictor = HotspotPredictor(
     allele="HLA-A*02:01",
     ml_bundle="data/models/staged_xgb.joblib",
-    scoring_mode="hybrid",  # deterministic | ml | hybrid
+    scoring_mode="hybrid",  # deterministic | statistical | ml | hybrid
 )
 result = predictor.predict("complex.pdb")
 ```
@@ -271,9 +274,19 @@ result = predictor.predict("complex.pdb")
 
 Features are **min–max normalized within each peptide** before scoring.
 
-### 3. Scoring (deterministic path)
+### 3. Four-layer scoring stack
 
-Default weights (`pmhc_hotspot/constants.py`):
+```text
+Layer 0 — Features        FreeSASA, NeighborSearch, geometry, allele rules
+Layer 1 — Heuristic       Hand-weighted HotspotScorer (bootstrap baseline)
+Layer 2 — Statistical     Elastic-net logistic + Platt calibration → P_stat
+Layer 3 — ML              XGBoost/logistic on features + stat_prob (+ pretrain_prob)
+Blend     — Hybrid        α·P_stat + (1−α)·P_ML  (α learned on OOF predictions)
+```
+
+#### Layer 1: Deterministic heuristic (bootstrap)
+
+Fixed weights in `pmhc_hotspot/constants.py` — fast, interpretable, no training data:
 
 | Feature | Weight |
 |---------|--------|
@@ -292,6 +305,35 @@ base = Σ (weight_i × normalized_feature_i)
 final_score = clamp(base × (1 − anchor_penalty), 0, 1)
 ```
 
+Use `scoring_mode="deterministic"` for this path.
+
+#### Layer 2: Statistical scorer (learned linear model)
+
+- **Model:** elastic-net logistic regression (`penalty=elasticnet`, `solver=saga`)
+- **Features:** structural columns only (no `stat_prob` / `pretrain_prob`)
+- **Calibration:** Platt scaling (`CalibratedClassifierCV`, sigmoid) by default
+- **Output:** `P_stat(contact)` per residue — replaces hand-tuned weights for ranking
+
+Use `scoring_mode="statistical"` with a saved bundle.
+
+#### Layer 3: Nonlinear ML
+
+- **Model:** XGBoost (default) or logistic on augmented features
+- **Extra inputs:** `stat_prob` from layer 2; optional `pretrain_prob` from IEDB stage 1
+- **Calibration:** Platt scaling on the final estimator
+
+Use `scoring_mode="ml"`.
+
+#### Hybrid blend (learned α)
+
+During `ml-staged`, out-of-fold `P_stat` and `P_ML` are combined:
+
+```
+P_hybrid = α · P_stat + (1 − α) · P_ML
+```
+
+`α` is chosen by grid search to maximize ROC-AUC on grouped OOF predictions (not a fixed 0.6). Use `scoring_mode="hybrid"`.
+
 ### 4. Hotspot selection (our algorithm)
 
 - Softly **down-weight** anchor positions (not hard-excluded); stronger penalty when buried
@@ -300,11 +342,14 @@ final_score = clamp(base × (1 − anchor_penalty), 0, 1)
 - Select **3–6** hotspots; scale hydrophobic requirement for smaller sets
 - Emit contiguous **patches** for spatially coherent targeting
 
-### 5. Optional ML path
+### 5. Inference scoring modes
 
-- **Stage 1:** IEDB (and optional ATLAS) peptide-level pretraining
-- **Stage 2:** Residue-level fine-tune on TCR-contact labels from benchmark PDBs
-- **Inference:** `deterministic`, `ml`, or `hybrid` (α-blend via `HybridScorer`)
+| `scoring_mode` | Ranking score |
+|----------------|---------------|
+| `deterministic` | Heuristic weighted sum (layer 1) |
+| `statistical` | Calibrated elastic-net `P_stat` (layer 2) |
+| `ml` | Calibrated ML `P_ML` (layer 3) |
+| `hybrid` | Learned α blend of statistical + ML |
 
 ---
 
@@ -330,7 +375,12 @@ pmhc-hotspot ml-staged \
 # Deterministic baseline
 pmhc-hotspot benchmark --download --contact-mode standard --scoring-mode deterministic
 
-# Hybrid ML + heuristic
+# Statistical layer only (requires bundle with statistical_model)
+pmhc-hotspot benchmark --download --contact-mode standard \
+  --scoring-mode statistical \
+  --ml-bundle data/models/staged_xgb.joblib
+
+# Hybrid: learned α · P_stat + (1−α) · P_ML
 pmhc-hotspot benchmark --download --contact-mode standard \
   --scoring-mode hybrid \
   --ml-bundle data/models/staged_xgb.joblib
@@ -413,7 +463,7 @@ pmhc-hotspot run complex.pdb \
 | `peptide_chain` / `hla_chain` | `str \| None` | Force chain IDs (auto-detect if `None`) |
 | `hotspot_config` | `dict` | `min_hotspots`, `max_hotspots`, `min_hydrophobic`, … |
 | `ml_bundle` | path or `StagedModelBundle` | Saved staged model for ML/hybrid scoring |
-| `scoring_mode` | `str` | `deterministic` (default), `ml`, or `hybrid` |
+| `scoring_mode` | `str` | `deterministic`, `statistical`, `ml`, or `hybrid` |
 
 ### `PredictionResult`
 
@@ -675,6 +725,7 @@ src/pmhc_hotspot/
 | Item | Status |
 |------|--------|
 | FreeSASA + NeighborSearch refactor | ✅ v0.3 |
+| Statistical layer + calibration + learned hybrid α | ✅ v0.3.1 |
 | ML inference + hybrid scoring | ✅ v0.3 |
 | Soft anchor suppression | ✅ v0.3 |
 | Leave-structures-out validation | ✅ v0.3 |

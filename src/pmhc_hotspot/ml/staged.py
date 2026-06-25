@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import pandas as pd
 
+from pmhc_hotspot.ml.calibration import learn_hybrid_alpha
 from pmhc_hotspot.ml.fine_tune import (
     attach_pretrain_probabilities,
     fine_tune_structural,
     fit_structural_model,
+    structural_feature_columns,
 )
 from pmhc_hotspot.ml.persistence import StagedModelBundle
 from pmhc_hotspot.ml.pretrain import fit_public_pretrain_model, train_public_pretrain
-from pmhc_hotspot.ml.train import CATEGORICAL_COLUMNS, FEATURE_COLUMNS
-
-
-def _structural_feature_columns(structural_df: pd.DataFrame, *, use_pretrain: bool) -> list[str]:
-    cols = [c for c in FEATURE_COLUMNS + CATEGORICAL_COLUMNS if c in structural_df.columns]
-    if use_pretrain and "pretrain_prob" in structural_df.columns and "pretrain_prob" not in cols:
-        cols = cols + ["pretrain_prob"]
-    return cols
+from pmhc_hotspot.ml.statistical import (
+    attach_stat_probabilities,
+    base_structural_feature_columns,
+    fit_statistical_model,
+    train_statistical_cv,
+)
 
 
 def run_staged_training(
@@ -30,13 +30,16 @@ def run_staged_training(
     random_state: int = 42,
     contact_mode: str = "standard",
     use_pretrain: bool = True,
-    hybrid_alpha: float = 0.6,
+    hybrid_alpha: float | None = None,
+    calibrate: bool = True,
 ) -> dict:
     """
-    Full two-stage recipe:
-    1) public pretraining on binding/affinity outcomes
-    2) structural fine-tuning on residue-level TCR-contact labels
-  """
+    Full staged recipe:
+    1) optional public pretraining (IEDB/ATLAS)
+    2) statistical elastic-net logistic on structural TCR-contact labels
+    3) nonlinear ML fine-tune with stat_prob (+ optional pretrain_prob)
+    4) learned hybrid blend weight (stat vs ML) from OOF predictions
+    """
     if use_pretrain and public_df.empty:
         raise ValueError("Public pretraining dataframe is empty")
     if structural_df.empty:
@@ -54,9 +57,20 @@ def run_staged_training(
         pretrained_model, _ = fit_public_pretrain_model(
             public_df, model_type=model_type, random_state=random_state
         )
-        structural_aug = attach_pretrain_probabilities(structural_df, pretrained_model)
-    else:
-        structural_aug = structural_df.copy()
+
+    statistical_cv = train_statistical_cv(
+        structural_df,
+        n_splits=n_splits,
+        random_state=random_state,
+        calibrate=calibrate,
+    )
+    statistical_model = fit_statistical_model(
+        structural_df, random_state=random_state, calibrate=calibrate
+    )
+    structural_aug = attach_stat_probabilities(structural_df, statistical_model)
+
+    if use_pretrain and pretrained_model is not None:
+        structural_aug = attach_pretrain_probabilities(structural_aug, pretrained_model)
 
     finetune_cv = fine_tune_structural(
         structural_aug,
@@ -64,34 +78,63 @@ def run_staged_training(
         n_splits=n_splits,
         random_state=random_state,
         use_pretrain_feature=use_pretrain,
+        use_stat_feature=True,
+        calibrate=calibrate,
     )
     final_model = fit_structural_model(
         structural_aug,
         model_type=model_type,
         random_state=random_state,
         use_pretrain_feature=use_pretrain,
+        use_stat_feature=True,
+        calibrate=calibrate,
     )
 
-    feature_cols = _structural_feature_columns(structural_aug, use_pretrain=use_pretrain)
+    stat_oof = statistical_cv["oof_predictions"]
+    ml_oof = pd.Series(finetune_cv["oof_predictions"], index=structural_aug.index)
+    learned_alpha = (
+        hybrid_alpha
+        if hybrid_alpha is not None
+        else learn_hybrid_alpha(
+            stat_oof,
+            ml_oof,
+            structural_aug["label"].astype(int),
+        )
+    )
+
+    stat_feature_cols = base_structural_feature_columns(structural_df)
+    ml_feature_cols = structural_feature_columns(
+        structural_aug,
+        use_stat_feature=True,
+        use_pretrain_feature=use_pretrain,
+    )
     bundle = StagedModelBundle(
         final_model=final_model,
-        feature_columns=feature_cols,
-        categorical_columns=[c for c in CATEGORICAL_COLUMNS if c in feature_cols],
+        feature_columns=ml_feature_cols,
+        categorical_columns=[c for c in ["aa"] if c in ml_feature_cols],
         model_type=model_type,
         use_pretrain_feature=use_pretrain,
+        use_stat_feature=True,
         contact_mode=contact_mode,
         pretrained_model=pretrained_model,
-        hybrid_alpha=hybrid_alpha,
+        statistical_model=statistical_model,
+        stat_feature_columns=stat_feature_cols,
+        hybrid_alpha=learned_alpha,
+        calibrated=calibrate,
     )
 
     return {
         "pretrain_cv": pretrain_cv,
+        "statistical_cv": statistical_cv,
         "finetune_cv": finetune_cv,
         "pretrained_model": pretrained_model,
+        "statistical_model": statistical_model,
         "final_model": final_model,
         "model_bundle": bundle,
+        "hybrid_alpha": learned_alpha,
         "n_public_rows": len(public_df) if use_pretrain else 0,
         "n_structural_rows": len(structural_df),
         "contact_mode": contact_mode,
         "use_pretrain": use_pretrain,
+        "calibrated": calibrate,
     }
