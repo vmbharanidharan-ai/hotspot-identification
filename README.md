@@ -1,124 +1,169 @@
 # pmhc-hotspot
 
-**Structure- and immunology-informed hotspot selection for peptide–MHC binder design**
+**Predict TCR-binding hotspots on peptide–MHC complexes for structure-guided TCR-mimetic binder design.**
 
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![CI](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml/badge.svg)](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-`pmhc-hotspot` is a pip- and conda-installable Python package that selects biologically meaningful hotspot residues on peptide–MHC (pMHC) complexes for [RFdiffusion](https://github.com/RosettaCommons/RFdiffusion) PPI binder design.
-
-It fills the missing middle layer in the design pipeline:
-
-```
-structure → (manual guesswork) → RFdiffusion hotspots → RFdiffusion
-                    ↓
-structure → pmhc-hotspot → ranked residues + patches + RFdiffusion export → RFdiffusion
-```
-
-> **Important:** This is a **heuristic design-prioritization** tool, not a predictor of T-cell activation, immunogenicity, or binding affinity. Scores rank residues for *generative binder targeting*, informed by structural exposure, MHC anchor biology, and interface geometry.
+**Quick links:** [Installation](#installation) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Design philosophy](#design-philosophy) · [Performance](#performance--validation) · [FAQ](#faq)
 
 ---
 
 ## Table of contents
 
-- [Why this package exists](#why-this-package-exists)
-- [Design philosophy](#design-philosophy)
-- [Biological rationale](#biological-rationale)
-- [Features](#features)
-- [Installation](#installation)
-- [Quick start](#quick-start)
-- [Python API](#python-api)
-- [CLI reference](#cli-reference)
-- [Scoring method](#scoring-method)
-- [RFdiffusion integration](#rfdiffusion-integration)
-- [Output formats](#output-formats)
-- [Benchmarking](#benchmarking)
-- [Project structure](#project-structure)
-- [Development](#development)
-- [Citation](#citation)
-- [License](#license)
+1. [Overview](#overview)
+2. [What this tool does (and doesn't do)](#what-this-tool-does-and-doesnt-do)
+3. [Design philosophy](#design-philosophy)
+4. [Installation](#installation)
+5. [Quick start](#quick-start)
+6. [How it works](#how-it-works)
+7. [Using the ML model](#using-the-ml-model)
+8. [Command-line reference](#command-line-reference)
+9. [Python API](#python-api)
+10. [Performance & validation](#performance--validation)
+11. [Biological validation](#biological-validation)
+12. [Limitations & caveats](#limitations--caveats)
+13. [RFdiffusion integration](#rfdiffusion-integration)
+14. [Troubleshooting](#troubleshooting)
+15. [FAQ](#faq)
+16. [Development](#development)
+17. [Citation](#citation)
+18. [License](#license)
 
 ---
 
-## Why this package exists
+## Overview
 
-Existing tools address **parts** of the problem but not the full design workflow:
+### The problem
 
-| Tool class | Examples | What they do | Gap |
-|------------|----------|--------------|-----|
-| Structure utilities | PyMOL, DSSP, FreeSASA | Visualization, SASA | No hotspot inference |
-| MHC binding predictors | NetMHCpan, MHCflurry | Peptide–MHC affinity | Not structural hotspots |
-| TCR modeling | TCRFlexDock, etc. | TCR–pMHC docking | Not RFdiffusion-ready design targets |
-| Generative design | RFdiffusion | Consumes `ppi.hotspot_res` | **Does not generate hotspots** |
+Designing **TCR-mimetic binders** (proteins that recognize pMHC like a TCR) requires knowing which peptide residues are contacted by TCRs—the **hotspots**. This is difficult because:
 
-`pmhc-hotspot` is the first open, explainable package focused on **pMHC-specific, RFdiffusion-ready hotspot selection** with allele-aware immunology built in.
+1. Many peptide positions anchor the peptide in the MHC groove rather than facing the TCR.
+2. Curated TCR–pMHC structural data are sparse (on the order of tens to low hundreds of complexes in the PDB).
+3. TCR recognition is specific; different TCRs can contact the same peptide differently.
+
+### The solution
+
+**pmhc-hotspot** combines structural biology, immunology, and optional machine learning to answer:
+
+> **Which peptide residues should a TCR-mimetic binder contact?**
+
+It:
+
+- **Ranks residues** using structure-based features (FreeSASA exposure, geometry, MHC burial)
+- **Refines with ML** (optional) using models trained on TCR-contact labels from PDB structures
+- **Applies biological filters** (allele-aware anchor down-weighting, hydrophobic design rules)
+- **Selects 3–6 hotspots** for binder design
+- **Exports RFdiffusion inputs** (hotspot tokens + contig templates)
+
+### Pipeline placement
+
+```
+structure → (manual guesswork) → RFdiffusion hotspots → RFdiffusion
+                    ↓
+structure → pmhc-hotspot → ranked residues + patches + export → RFdiffusion
+```
+
+### Why use this?
+
+- **No TCR sequence required** — predicts from pMHC structure alone
+- **Fast** — scores a typical pMHC complex in under a second
+- **Biologically grounded** — MHC anchor rules, burial, hydrophobic design constraints
+- **ML-enhanced (optional)** — staged pretrain + structural fine-tune; hybrid scoring at inference
+- **RFdiffusion-ready** — `ppi.hotspot_res` tokens and contig strings
+- **Transparent** — per-residue score breakdown via `explain`
+- **Built on proven tools** — FreeSASA, BioPython, scikit-learn/XGBoost
+
+> **Important:** This is **structural design prioritization**, not a predictor of T-cell activation, immunogenicity, or MHC binding affinity.
+
+---
+
+## What this tool does (and doesn't do)
+
+### Does
+
+| Capability | Description |
+|------------|-------------|
+| TCR-contact ranking | Score peptide residues for TCR-facing likelihood from a PDB structure |
+| Hotspot selection | Pick **3–6** residues with biological filters for RFdiffusion |
+| Feature explanations | Weighted breakdown per residue (SASA, protrusion, anchor penalty, …) |
+| RFdiffusion export | Hotspot tokens, contig template, YAML helper |
+| MHC-I alleles | Curated anchor table (HLA-A/B/C common alleles + generic fallback) |
+| Benchmarking | TCR-contact recovery on a curated manifest with tiered contact definitions |
+| ML training | Two-stage pipeline: IEDB pretrain → structural TCR-contact fine-tune |
+
+### Doesn't
+
+| Limitation | Use instead |
+|------------|-------------|
+| Predict immunogenicity / T-cell activation | Epitope predictors, functional assays |
+| Score MHC binding affinity | NetMHCpan, MHCflurry |
+| Model TCR V/J-specific contacts | TCR sequence–peptide predictors (NetTCR, etc.) |
+| Design binder scaffolds | RFdiffusion or other generative design tools |
+| Run without 3D coordinates | Sequence-only tools |
+| Guarantee experimental success | SPR, ELISA, cell assays |
+
+### Appropriate use cases
+
+| Suitable | Not suitable |
+|----------|--------------|
+| Rank residues for TCR-mimetic binder targeting | Predict TCR binding without structure |
+| Guide RFdiffusion `ppi.hotspot_res` selection | Identify immunodominant epitopes from sequence alone |
+| Explore peptide–MHC–TCR interfaces | Design MHC molecules |
+| Benchmark structure-based contact recovery | Predict cross-reactive TCR specificity |
 
 ---
 
 ## Design philosophy
 
-`pmhc-hotspot` combines **standard structural biology tools** with **domain-specific TCR-contact hotspot logic**:
+**pmhc-hotspot separates commodity structural calculations from domain-specific hotspot logic.**
 
-| Task | Tool | Rationale |
-|------|------|-----------|
-| SASA calculation | [FreeSASA](https://github.com/mittinatten/freesasa) | Peer-reviewed, fast, matches NACCESS; native apolar/polar splits |
-| Contact detection | BioPython `NeighborSearch` | Spatial indexing; avoids O(n²) all-pairs distance loops |
-| PDB parsing | BioPython | Community standard |
-| Protrusion / curvature / bulge | **This package** | TCR-facing peptide geometry (domain-specific) |
-| Anchor suppression & hydrophobic rules | **This package** | MHC-I biochemistry for binder design |
-| Hotspot selection (3–6 residues) | **This package** | RFdiffusion-ready, allele-aware filtering |
-| ML on structural TCR contacts | **This package** | Residue-level labels from TCR-bound PDBs |
-| RFdiffusion export | **This package** | `ppi.hotspot_res` tokens and contig templates |
+### Outsourced (community tools)
 
-We do **not** reinvent commodity structural calculations. The unique contribution is answering:
+| Task | Tool | Why |
+|------|------|-----|
+| SASA | [FreeSASA](https://github.com/mittinatten/freesasa) | Peer-reviewed, fast; residue apolar/polar splits |
+| Contact detection | BioPython `NeighborSearch` | Spatial indexing for HLA and TCR contacts |
+| PDB parsing | BioPython | Standard structural I/O |
+| ML (optional) | scikit-learn / XGBoost | Small-data tabular models with grouped CV |
 
-> **Which peptide residues should a TCR-mimetic binder contact for RFdiffusion design?**
+### Our contribution (novel IP)
 
-That is orthogonal to NetMHCpan (binding affinity), NetTCR (sequence recognition), or RFdiffusion itself (scaffold generation).
+| Component | What it does |
+|-----------|--------------|
+| TCR-contact ML | Residue-level labels from TCR-bound PDBs; staged pretrain + fine-tune |
+| Hotspot selection | 3–6 residues; Pro/Gly filters; scaled hydrophobic rules; soft anchor down-weight |
+| Geometry features | Protrusion, curvature, bulge — TCR-facing peptide geometry |
+| Allele biochemistry | Anchor suppression, exposure priors, chemical hierarchy |
+| RFdiffusion bridge | Token export and contig templates |
 
----
+### Processing pipeline
 
-## Biological rationale
-
-Hotspot selection for pMHC binder design must respect three **distinct** concepts (not a single "exposure" score):
-
-### 1. MHC-I anchor residues (allele-dependent)
-
-Class I peptides bind via N-terminal (P2) and C-terminal (PΩ) anchors that sit in the MHC groove. These positions are poor RFdiffusion targets when buried. The package uses a **curated allele table** (HLA-A\*02:01, A\*24:02, B\*44:02, etc.) with **multiplicative suppression** when anchors are buried.
-
-### 2. TCR-facing exposure
-
-TCRs recognize a conformational footprint spanning central peptide residues (often P3–P8) and some MHC α-helical residues. Central **bulge/protrusion** geometry can mark TCR-contacted positions even when absolute SASA is moderate.
-
-### 3. Peptide stabilization & designability
-
-Proline and glycine are deprioritized (rigid or too flexible for PPI hotspots). Final hotspot sets require **≥3 hydrophobic residues** (W/F/Y/M/L/I/V/C), consistent with RFdiffusion PPI interface guidelines.
-
-### What we explicitly do *not* claim
-
-- Mutation proximity is a **soft bias**, not proof of immunogenicity
-- High SASA alone does not define a good hotspot
-- Scores are structure-quality-dependent (low pLDDT/B-factor regions are downweighted)
-
----
-
-## Features
-
-- **FreeSASA-backed exposure** — absolute/relative SASA plus apolar/polar surface fractions
-- **BioPython spatial contacts** — efficient HLA burial and peptide-neighbor counts
-- **Deterministic baseline scorer** — no ML required for core workflow
-- **Variable peptide length** — 8–15 residues (not hardcoded to 9-mers)
-- **Normalized, explainable features** — every score decomposes into weighted components
-- **Contiguous patch selection** — spatially coherent targets for RFdiffusion
-- **RFdiffusion export** — `ppi.hotspot_res` tokens, contig template, YAML helper
-- **Structure validation** — chain detection, missing atoms, altloc warnings
-- **CLI + Python API** — same logic in both interfaces
-- **JSON + TSV export** — human-readable and machine-consumable
-- **Benchmarking scaffold** — TCR-contact recovery, anchor avoidance, patch contiguity
+```mermaid
+flowchart TD
+    A[Load PDB — BioPython] --> B[Validate chains]
+    B --> C[Per-residue features]
+    C --> C1[FreeSASA: SASA + apolar/polar]
+    C --> C2[BioPython NeighborSearch: HLA contacts]
+    C --> C3[Our code: protrusion, curvature, bulge]
+    C --> C4[Our code: anchor rules, chemical score]
+    C --> D[Score residues]
+    D --> D1[Deterministic weighted sum]
+    D --> D2[Optional ML / hybrid blend]
+    D --> E[Select 3–6 hotspots — our code]
+    E --> F[Export TSV / JSON / RFdiffusion YAML]
+```
 
 ---
 
 ## Installation
+
+### Requirements
+
+- Python **3.9+**
+- **FreeSASA** (installed automatically via pip/conda dependencies)
+- **Biopython**, NumPy, SciPy, pandas
 
 ### pip (recommended)
 
@@ -128,10 +173,10 @@ cd hotspot-identification
 pip install -e .
 ```
 
-With development dependencies:
+Development + ML extras:
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev,ml]"
 ```
 
 ### conda
@@ -139,18 +184,13 @@ pip install -e ".[dev]"
 ```bash
 conda env create -f environment.yml
 conda activate pmhc-hotspot
+# or: conda install -c conda-forge freesasa biopython
 ```
 
-Or build from the included recipe:
+Build from the bundled recipe:
 
 ```bash
 conda build conda/
-```
-
-### Optional ML extras (Phase 2)
-
-```bash
-pip install -e ".[ml]"
 ```
 
 ---
@@ -160,16 +200,16 @@ pip install -e ".[ml]"
 ### CLI
 
 ```bash
-# Score hotspots and write TSV + optional JSON
+# Score hotspots → TSV (+ optional JSON)
 pmhc-hotspot run complex.pdb --allele HLA-A*02:01 --out hotspots.tsv --json-out hotspots.json
 
 # Per-residue explanation
 pmhc-hotspot explain complex.pdb --allele HLA-A*02:01
 
-# Export RFdiffusion template
+# RFdiffusion YAML template
 pmhc-hotspot export-rfdiffusion complex.pdb design_config.yaml
 
-# Validate structure only
+# Structure validation only
 pmhc-hotspot validate complex.pdb
 ```
 
@@ -180,17 +220,183 @@ from pmhc_hotspot import HotspotPredictor
 
 predictor = HotspotPredictor(
     allele="HLA-A*02:01",
-    mutation_positions=[4],  # 0-based index; P5 in 1-based notation
+    mutation_positions=[4],  # 0-based; P5 in 1-based notation
 )
 
 result = predictor.predict("complex.pdb")
 
 print(result.peptide_sequence)
-print(result.rfdiffusion_hotspot_res)   # e.g. "P4,P5,P6,P7,P8"
-print(result.contig_template)           # e.g. "P1-9/0 H1-20/0 50-80"
+print(result.rfdiffusion_hotspot_res)   # e.g. "C4,C5,C6,C7,C8"
+print(result.contig_template)           # e.g. "C1-9/0 A1-275/0 50-80"
 
-for r in result.hotspots:
-    print(r.position, r.aa, f"{r.score:.3f}", r.explanation)
+for h in result.hotspots:
+    print(h.position, h.aa, f"{h.score:.3f}")
+```
+
+### ML-enhanced prediction
+
+```python
+predictor = HotspotPredictor(
+    allele="HLA-A*02:01",
+    ml_bundle="data/models/staged_xgb.joblib",
+    scoring_mode="hybrid",  # deterministic | ml | hybrid
+)
+result = predictor.predict("complex.pdb")
+```
+
+---
+
+## How it works
+
+### 1. Structure loading and validation
+
+- Parse PDB/mmCIF with Biopython
+- Auto-detect peptide (8–15 aa) and HLA chains (override with `--peptide-chain` / `--hla-chain`)
+- Warn on missing atoms, altlocs, low-confidence regions
+
+### 2. Feature extraction
+
+| Feature | Source | Role |
+|---------|--------|------|
+| Relative SASA | FreeSASA | Solvent exposure / TCR accessibility |
+| Apolar / polar SASA fractions | FreeSASA + `surface.py` | Hydrophobic vs polar exposed area |
+| HLA contact count | BioPython `NeighborSearch` | MHC groove burial proxy |
+| Peptide neighbor contacts | BioPython `NeighborSearch` | Local packing |
+| Protrusion, curvature, bulge | Our geometry code | TCR-facing bulge / backbone shape |
+| TCR exposure prior | Our code | Central positions (P3–P8) + chemistry |
+| Chemical score | Our code | W/R/Y/F/K hierarchy from PPI literature |
+| Mutation proximity | Our code | Optional neoantigen bias |
+| Confidence | Our code | B-factor / occupancy down-weight |
+| Anchor penalty | Our code | Allele-aware soft suppression |
+
+Features are **min–max normalized within each peptide** before scoring.
+
+### 3. Scoring (deterministic path)
+
+Default weights (`pmhc_hotspot/constants.py`):
+
+| Feature | Weight |
+|---------|--------|
+| SASA | 25% |
+| Protrusion | 18% |
+| Low HLA contact | 12% |
+| Mutation proximity | 12% |
+| TCR exposure prior | 10% |
+| Curvature | 8% |
+| Bulge | 8% |
+| Chemical score | 5% |
+| Confidence | 2% |
+
+```
+base = Σ (weight_i × normalized_feature_i)
+final_score = clamp(base × (1 − anchor_penalty), 0, 1)
+```
+
+### 4. Hotspot selection (our algorithm)
+
+- Softly **down-weight** anchor positions (not hard-excluded); stronger penalty when buried
+- Skip Pro, Gly; skip N-terminal Ala/Gly
+- Prefer central TCR-facing positions
+- Select **3–6** hotspots; scale hydrophobic requirement for smaller sets
+- Emit contiguous **patches** for spatially coherent targeting
+
+### 5. Optional ML path
+
+- **Stage 1:** IEDB (and optional ATLAS) peptide-level pretraining
+- **Stage 2:** Residue-level fine-tune on TCR-contact labels from benchmark PDBs
+- **Inference:** `deterministic`, `ml`, or `hybrid` (α-blend via `HybridScorer`)
+
+---
+
+## Using the ML model
+
+### Train and save
+
+```bash
+pmhc-hotspot ml-staged \
+  --iedb data/iedb.csv \
+  --manifest src/pmhc_hotspot/benchmark/tcr_pmhc_manifest.yaml \
+  --download \
+  --model xgboost \
+  --contact-mode standard \
+  --save-model data/models/staged_xgb.joblib
+```
+
+`--contact-mode` controls TCR-contact **ground-truth labels** (`strict` | `standard` | `permissive`). Use **`standard`** for training and primary reporting.
+
+### Benchmark with ML
+
+```bash
+# Deterministic baseline
+pmhc-hotspot benchmark --download --contact-mode standard --scoring-mode deterministic
+
+# Hybrid ML + heuristic
+pmhc-hotspot benchmark --download --contact-mode standard \
+  --scoring-mode hybrid \
+  --ml-bundle data/models/staged_xgb.joblib
+```
+
+### Leave-structures-out validation
+
+```bash
+pmhc-hotspot ml-holdout \
+  --iedb data/iedb.csv \
+  --download \
+  --contact-mode standard \
+  --scoring-mode hybrid \
+  --hold-out 5C0B --hold-out 3QDG \
+  --save-model data/models/holdout_xgb.joblib
+```
+
+### Other ML commands
+
+```bash
+pmhc-hotspot ml-pretrain --iedb data/iedb.csv --model xgboost
+pmhc-hotspot ml-fine-tune --iedb data/iedb.csv --download --contact-mode standard
+pmhc-hotspot ml-train --download --contact-mode standard
+```
+
+> Public IEDB labels are **pretraining signal only** (peptide binding), not residue-level TCR-contact truth. Structural labels come from the benchmark manifest.
+
+---
+
+## Command-line reference
+
+| Command | Description |
+|---------|-------------|
+| `run STRUCTURE` | Score hotspots → TSV (+ optional JSON) |
+| `explain STRUCTURE` | Per-residue score breakdown |
+| `export-rfdiffusion STRUCTURE OUTPUT.yaml` | RFdiffusion config template |
+| `validate STRUCTURE` | Structure checks without scoring |
+| `benchmark` | TCR-contact recovery on manifest |
+| `ml-pretrain` | Stage 1: public binding data CV |
+| `ml-fine-tune` | Stage 2: structural residue labels |
+| `ml-staged` | Full two-stage training + optional `--save-model` |
+| `ml-holdout` | Leave-structures-out train + evaluate |
+| `ml-train` | Grouped CV on structural features only |
+
+### `benchmark` options (key)
+
+```bash
+pmhc-hotspot benchmark \
+  --manifest src/pmhc_hotspot/benchmark/tcr_pmhc_manifest.yaml \
+  --download \
+  --contact-mode standard \
+  --scoring-mode deterministic \
+  --ml-bundle path/to/model.joblib \
+  --out benchmark_report.json
+```
+
+### `run` options (key)
+
+```bash
+pmhc-hotspot run complex.pdb \
+  --allele HLA-A*02:01 \
+  --mutation P5 \
+  --peptide-chain C \
+  --hla-chain A \
+  --out hotspots.tsv \
+  --json-out hotspots.json
 ```
 
 ---
@@ -201,246 +407,315 @@ for r in result.hotspots:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `allele` | `str \| None` | HLA allele (`HLA-A*02:01`, `HLA-A02:01`, etc.) |
-| `mutation_positions` | `list[int]` | 0-based peptide indices with somatic mutations |
-| `weights` | `dict` | Override default feature weights |
-| `peptide_chain` | `str \| None` | Force peptide chain ID (auto-detect if `None`) |
-| `hla_chain` | `str \| None` | Force HLA chain ID |
-| `hotspot_config` | `dict` | `min_hotspots`, `max_hotspots`, `min_hydrophobic`, etc. |
+| `allele` | `str \| None` | HLA allele (`HLA-A*02:01`, `HLA-A02:01`, …) |
+| `mutation_positions` | `list[int]` | 0-based peptide indices with mutations |
+| `weights` | `dict` | Override `DEFAULT_WEIGHTS` |
+| `peptide_chain` / `hla_chain` | `str \| None` | Force chain IDs (auto-detect if `None`) |
+| `hotspot_config` | `dict` | `min_hotspots`, `max_hotspots`, `min_hydrophobic`, … |
+| `ml_bundle` | path or `StagedModelBundle` | Saved staged model for ML/hybrid scoring |
+| `scoring_mode` | `str` | `deterministic` (default), `ml`, or `hybrid` |
 
 ### `PredictionResult`
 
 | Field | Description |
 |-------|-------------|
-| `residue_scores` | All peptide residues, ranked by score |
-| `hotspots` | Final RFdiffusion hotspot set (5–6 residues, biologically filtered) |
+| `residue_scores` | All peptide residues, ranked by score (or hybrid rank) |
+| `hotspots` | Final RFdiffusion hotspot set (3–6 residues) |
 | `patches` | Contiguous high-scoring surface patches |
 | `rfdiffusion_hotspot_res` | Comma-separated `ChainResnum` tokens |
-| `contig_template` | RFdiffusion contig string fixing peptide + HLA |
-| `metadata` | Warnings, anchor positions, method version |
+| `contig_template` | RFdiffusion contig string |
+| `metadata` | Warnings, anchor positions, scoring mode, method version |
 
----
-
-## CLI reference
-
-```
-pmhc-hotspot run STRUCTURE [--allele ALLELE] [--mutation P5] [--out FILE] [--json-out FILE]
-pmhc-hotspot explain STRUCTURE [--allele ALLELE]
-pmhc-hotspot export-rfdiffusion STRUCTURE OUTPUT.yaml [--binder-min N] [--binder-max N]
-pmhc-hotspot validate STRUCTURE
+```python
+result = HotspotPredictor(allele="HLA-A*02:01").predict("complex.pdb")
+report = HotspotPredictor().benchmark(download=True, contact_mode="standard")
+frame = HotspotPredictor().build_ml_training_frame(download=True, contact_mode="standard")
 ```
 
 ---
 
-## Scoring method
+## Performance & validation
 
-### Pipeline
+Benchmark manifest: **11** curated TCR-bound pMHC structures (`tcr_pmhc_manifest.yaml`). Metrics use **`standard`** contact mode (≤4.5 Å with side-chain involvement, or ≤3.5 Å backbone pairs).
 
-1. Load PDB/mmCIF (Biopython)
-2. Validate structure and infer peptide/HLA chains
-3. Map residues to P1–Pn with normalized position (0–1)
-4. Compute per-residue features
-5. **Min-max normalize** features within the peptide (critical for cross-structure comparability)
-6. Weighted linear combination → base score
-7. **Multiplicative anchor penalty** for buried anchor residues
-8. Select contiguous patches and final RFdiffusion hotspot set
+### Deterministic heuristic (representative run)
 
-### Features (Phase 1)
+| Metric | All | 8–9 mer | 10–11 mer |
+|--------|-----|---------|-----------|
+| Recall@5 | **0.679** | **0.81** | **0.57** |
+| Precision@5 | 0.89 | — | — |
+| Anchor avoidance@5 | 1.00 | — | — |
 
-| Feature | Biological role |
-|---------|-----------------|
-| Relative SASA | Solvent exposure / TCR accessibility proxy |
-| Protrusion | Local convexity above peptide neighborhood |
-| Curvature | Backbone deviation at residue |
-| Bulge | Cα displacement from local backbone (central bulge) |
-| HLA contact burden | Burial in MHC groove (inverted in score) |
-| TCR exposure prior | Central position + favorable chemistry (W/R/Y/F/K) |
-| Mutation proximity | Soft neoantigen bias (optional) |
-| Confidence | Downweight low pLDDT / high B-factor regions |
-| Chemical score | Interface hotspot hierarchy from alanine-scanning literature |
+### ML training (IEDB-only pretrain, XGBoost, standard labels)
 
-### Baseline formula
+| Stage | Metric |
+|-------|--------|
+| Stage 1 pretrain (IEDB) | ROC-AUC **0.731** |
+| Stage 2 finetune (structural CV) | ROC-AUC **0.798** |
+
+Finetune CV AUC measures **residue-level contact classification** on the training manifest; benchmark recall@5 measures **top-5 ranking** against TCR contacts — these are related but not identical.
+
+### Contact-mode sensitivity (same predictor, different ground truth)
+
+| Contact mode | Mean contacts / peptide | Recall@5 |
+|--------------|-------------------------|----------|
+| permissive | ~7.4 | ~0.66 |
+| **standard** | ~6.7 | **~0.69** |
+| strict | ~2.5 | ~0.74 (inflated — fewer labels) |
+
+Use **`standard`** for training and primary reporting.
+
+### Interpretation
+
+- **Recall@5 ~0.68:** Of true TCR-contact residues, roughly two-thirds appear in the top-5 predictions — better than random, not perfect.
+- **Length gap:** 8–9 mers are easier (snug groove geometry); 10–11 mers bulge more and are harder.
+- **ML:** Improves finetune AUC; re-benchmark with `--scoring-mode hybrid` after training to see if ranking improves on your holdout set.
+
+---
+
+## Biological validation
+
+### TCR recognition sketch
 
 ```
-base = Σ (weight_i × normalized_feature_i)
-final_score = clamp(base × (1 − anchor_penalty), 0, 1)
+              TCR
+             /|\
+            / | \
+    ┌───────────────────┐
+    │  MHC-I groove      │
+    │  ┌─────────────┐  │
+    │  │ P2 … PΩ     │  │  P2, PΩ: anchors (often buried)
+    │  │   P4 P5 P7  │  │  P4–P8: common TCR contacts
+    │  └─────────────┘  │
+    └───────────────────┘
 ```
 
-Default weights are in `pmhc_hotspot/constants.py` and can be overridden.
+### Anchor handling (v0.3+)
 
-### Final hotspot selection rules
+- **Older approach:** Hard-exclude buried anchors → false negatives on non-canonical cases.
+- **Current approach:** **Soft down-weight** via `AnchorFilter.selection_multiplier()` (floor 0.15×); exposed anchors penalized less than buried anchors.
+- Hotspot selection and scoring both use soft penalties; anchors can still rank highly when structurally justified.
 
-- Skip allele anchor positions (when buried)
-- Skip Pro, Gly; skip N-terminal Ala/Gly
-- Select 5–6 contiguous central residues when possible
-- Require ≥3 hydrophobic residues in final set
+### Feature rationale
+
+| Feature | Evidence | Usage |
+|---------|----------|-------|
+| SASA | Strong | Exposed residues more TCR-accessible (FreeSASA) |
+| Protrusion / bulge | Medium | Central bulge often TCR-contacted |
+| HLA contacts | Medium | Burial in groove; inverted in score |
+| P3–P8 prior | Strong | Central positions enriched in TCR footprints |
+| Hydrophobic chemistry | Medium | PPI hotspot hierarchy (W/R/Y/F/…) |
+| Apolar SASA fraction | Medium | FreeSASA apolar/polar split for ML features |
+
+---
+
+## Limitations & caveats
+
+1. **Small structural training set** — 11 PDBs in the default manifest; generalization to unseen alleles/structures is limited. Use `ml-holdout` before trusting ML on new data.
+2. **HLA-A\*02:01 bias** — Most benchmark structures are A\*02:01; other alleles use generic or curated rules with less validation.
+3. **Generic TCR contacts** — Labels come from *a* TCR in the crystal structure, not your clonotype of interest.
+4. **Peptide length** — 10–11 mers show lower recall@5 than 8–9 mers.
+5. **No immunogenicity** — Hotspots ≠ immunodominance.
+6. **Assumes MHC binding** — Input peptide should already be a plausible binder (validate with NetMHCpan/MHCflurry first).
+7. **Structure quality** — Missing atoms, high B-factors, or low-confidence regions reduce reliability (`validate` + `explain`).
+8. **RFdiffusion loop unvalidated** — Hotspot export is provided; designed binder contact rates are not yet systematically benchmarked in this package.
+
+### Recommended ensemble workflow
+
+1. **MHC binding** — NetMHCpan / MHCflurry  
+2. **Hotspots** — pmhc-hotspot (this package)  
+3. **Immunogenicity** — IEDB tools / netCTL (if relevant)  
+4. **Design** — RFdiffusion with exported hotspots  
+5. **Validation** — MD, docking, SPR/ELISA, cellular assays  
 
 ---
 
 ## RFdiffusion integration
 
-The package exports three artifacts:
+### Workflow
 
-### 1. `ppi.hotspot_res` string
+```bash
+# 1. Score and inspect
+pmhc-hotspot run 1BD2.pdb --allele HLA-A*02:01 --json-out hotspots.json
 
-Comma-separated chain+residue tokens matching RFdiffusion PPI convention:
+# 2. Export YAML template
+pmhc-hotspot export-rfdiffusion 1BD2.pdb rfdiffusion_config.yaml
 
-```
-P4,P5,P6,P7,P8
-```
-
-### 2. Contig template
-
-Fixes peptide and HLA chains, defines binder length range:
-
-```
-P1-9/0 H1-275/0 50-80
+# 3. Use tokens in RFdiffusion (verify against your RFdiffusion version)
+#    ppi.hotspot_res from JSON/YAML output
+#    contig from result.contig_template
 ```
 
-### 3. YAML config template
+### Exported artifacts
 
-Minimal helper (verify against your RFdiffusion version):
+1. **`ppi.hotspot_res`** — comma-separated chain+residue tokens, e.g. `C4,C5,C6,C7,C8`
+2. **Contig template** — fixes peptide + HLA, defines binder length range, e.g. `C1-9/0 A1-275/0 50-80`
+3. **YAML helper** — starter config (formats evolve across RFdiffusion versions — treat as a template)
+
+Example YAML fragment:
 
 ```yaml
 ppi:
-  hotspot_res: P4,P5,P6,P7,P8
-  target_chains: [H]
+  hotspot_res: C4,C5,C6,C7,C8
+  target_chains: [A]
 contigmap:
-  contigs: P1-9/0 H1-275/0 50-80
+  contigs: C1-9/0 A1-275/0 50-80
   num_designs: 100
 ```
 
-> RFdiffusion config formats evolve. Treat the YAML export as a **versioned template**, not a guaranteed drop-in for all releases.
+---
+
+## Troubleshooting
+
+**`ImportError: FreeSASA is not installed`**
+
+```bash
+pip install freesasa
+# or
+conda install -c conda-forge freesasa
+pip install -e .
+```
+
+**`No such option '--contact-mode'` on `ml-staged`**
+
+Pull the latest `main` (v0.3+). Older installs only had `--contact-mode` on `benchmark`.
+
+**`--ml-bundle is required when --scoring-mode is ml or hybrid`**
+
+Train and save a model first (`ml-staged --save-model …`) or pass an existing `.joblib` bundle.
+
+**`Could not resolve peptide/MHC/TCR chains`**
+
+Specify chains explicitly:
+
+```bash
+pmhc-hotspot run complex.pdb --peptide-chain C --hla-chain A --allele HLA-A*02:01
+```
+
+**Low scores on expected hotspots**
+
+```bash
+pmhc-hotspot validate complex.pdb
+pmhc-hotspot explain complex.pdb --allele HLA-A*02:01
+```
+
+Check B-factors, missing side chains, and whether the residue is a buried anchor.
+
+**ML does not beat heuristic on benchmark**
+
+Compare modes explicitly:
+
+```bash
+pmhc-hotspot benchmark --download --scoring-mode deterministic --out det.json
+pmhc-hotspot benchmark --download --scoring-mode hybrid \
+  --ml-bundle data/models/staged_xgb.joblib --out hybrid.json
+```
+
+If gains are within noise, the deterministic path is simpler and fully interpretable.
 
 ---
 
-## Output formats
+## FAQ
 
-### TSV
+**Do I need a TCR sequence?**  
+No. Predictions use pMHC structure only. TCR information is implicit in structural training labels.
 
-Tab-separated per-residue table with scores, features, and JSON-encoded explanations.
+**Which structures work best?**  
+X-ray (≤2.5 Å) or high-quality cryo-EM. Run `pmhc-hotspot validate` first.
 
-### JSON
+**MHC-II support?**  
+Not yet. This release targets MHC-I peptides (8–15 aa).
 
-Full `PredictionResult` serialization including patches, metadata, and provenance — suitable for downstream pipelines.
+**What does recall@5 mean?**  
+If a TCR contacts several peptide residues, what fraction appear in our top-5 ranked positions?
 
----
+**Why are 10-mers harder?**  
+Longer peptides often bulge out of the groove; geometry and contact patterns are less canonical.
 
-## Benchmarking
+**Can I train on my own labeled structures?**  
+Yes — add entries to a manifest YAML and use `ml-staged` / `ml-holdout`. See `src/pmhc_hotspot/benchmark/tcr_pmhc_manifest.yaml` for the schema.
 
-Run the bundled 15-structure TCR-contact benchmark (download PDBs first):
-
-```bash
-pmhc-hotspot benchmark --download --out benchmark_report.json
-```
-
-From Python:
-
-```python
-from pmhc_hotspot import HotspotPredictor
-
-report = HotspotPredictor(allele="HLA-A*02:01").benchmark(download=True)
-print(report["summary"])
-```
-
-Metrics per structure: recall@k, precision@k, anchor avoidance@k, patch contiguity@k, stratified by peptide length (8–9, 10–11, 12+).
-
-### Optional ML layer (two-stage)
-
-**Stage 1 — public pretraining** (IEDB/ATLAS-style CSV exports you provide):
-
-```bash
-pip install -e ".[ml]"
-pmhc-hotspot ml-pretrain --iedb exports/iedb.csv --atlas exports/atlas.csv
-```
-
-**Stage 2 — structural fine-tuning** (TCR-contact residue labels from curated PDBs):
-
-```bash
-pmhc-hotspot ml-fine-tune --manifest path/to/manifest.yaml --iedb exports/iedb.csv --download
-```
-
-**Full staged pipeline:**
-
-```bash
-pmhc-hotspot ml-staged --iedb exports/iedb.csv --download
-```
-
-Public binding labels are **pretraining signal only** — not residue-level TCR-contact truth. Structural fine-tuning uses separate grouped CV by PDB ID.
-
-See [docs/PUBLISHING.md](docs/PUBLISHING.md) for PyPI/conda-forge release steps and [NOTICE](NOTICE) for licensing notes.
-
----
-
-## Project structure
-
-```
-hotspot-identification/
-├── src/pmhc_hotspot/          # Main package
-│   ├── api.py                 # HotspotPredictor (public API)
-│   ├── cli.py                 # Command-line interface
-│   ├── types.py               # ResidueScore, HotspotPatch, PredictionResult
-│   ├── features/              # SASA, geometry, contacts, allele rules
-│   ├── scoring/               # Baseline scorer, patches, selection
-│   └── benchmarking/          # Dataset + metrics scaffold
-├── tests/                     # Unit + integration tests
-├── examples/                  # Example inputs
-├── conda/meta.yaml            # Conda recipe
-├── pyproject.toml             # pip/Hatch packaging
-└── environment.yml            # Conda development environment
-```
+**Does this replace RFdiffusion?**  
+No. pmhc-hotspot **selects hotspots**; RFdiffusion **generates binders** conditioned on them.
 
 ---
 
 ## Development
 
 ```bash
-# Install in editable mode with dev tools
-pip install -e ".[dev]"
+git clone https://github.com/vmbharanidharan-ai/hotspot-identification.git
+cd hotspot-identification
+pip install -e ".[dev,ml]"
 
-# Run tests
 pytest
-
-# Run with coverage
 pytest --cov=pmhc_hotspot --cov-report=term-missing
-
-# Lint
 ruff check src tests
 black --check src tests
 ```
 
+### Project layout
+
+```
+src/pmhc_hotspot/
+├── api.py                 # HotspotPredictor
+├── cli.py                 # Command-line interface
+├── features/
+│   ├── sasa.py            # FreeSASA wrapper
+│   ├── spatial.py         # BioPython NeighborSearch helpers
+│   ├── surface.py         # Apolar/polar surface fractions
+│   ├── contacts.py        # HLA / peptide contact counts
+│   └── geometry.py        # Protrusion, curvature, bulge (our code)
+├── scoring/               # Baseline scorer, patches, selection (our code)
+├── ml/                    # Staged training, hybrid inference, persistence
+└── benchmark/             # Manifest, contact labels, holdout validation
+```
+
 ### Roadmap
 
-| Phase | Status | Content |
-|-------|--------|---------|
-| **1** | ✅ v0.2.0 | Deterministic scorer, patches, RFdiffusion export, CLI, benchmark runner |
-| **2** | ✅ v0.2.0 | Benchmark runner on 15 TCR-bound structures; ML CV scaffold |
-| **3** | Optional | Production XGBoost model artifact + hybrid scoring integration |
+| Item | Status |
+|------|--------|
+| FreeSASA + NeighborSearch refactor | ✅ v0.3 |
+| ML inference + hybrid scoring | ✅ v0.3 |
+| Soft anchor suppression | ✅ v0.3 |
+| Leave-structures-out validation | ✅ v0.3 |
+| Multi-allele expansion | Planned |
+| MHC-II support | Planned |
+| RFdiffusion design contact benchmarking | Planned |
 
 ---
 
 ## Citation
 
-If you use `pmhc-hotspot` in research, please cite:
+If you use pmhc-hotspot in research, please cite:
 
 ```bibtex
 @software{pmhc_hotspot2026,
-  title  = {pmhc-hotspot: Structure-aware hotspot selection for peptide-MHC binder design},
+  title  = {pmhc-hotspot: Structure-guided TCR-contact hotspot selection for peptide-MHC binder design},
   author = {Bharanidharan, Vedha},
   year   = {2026},
-  url    = {https://github.com/vmbharanidharan-ai/hotspot-identification}
+  url    = {https://github.com/vmbharanidharan-ai/hotspot-identification},
+  version = {0.3.0}
 }
 ```
 
+### Dependencies to cite
+
+- **FreeSASA:** Mitternacht S. *F1000Research* 2016;5:189  
+- **BioPython:** Cock PJA et al. *Bioinformatics* 2009;25(3):422–423  
+- **XGBoost:** Chen T, Guestrin C. KDD 2016  
+
 ### Key references
 
-- Rudolph, M. G. et al. Crystal structures of MHC-I/peptide/TCR complexes — anchor and TCR footprint biology
-- Tien, M. Z. et al. (2013) Maximum accessible surface area benchmarks for relative SASA
-- Watson, J. L. et al. (2023) RFdiffusion — generative protein design with PPI hotspot conditioning
-- NetMHCpan motif tables — allele-specific anchor position curation
+- Rudolph MG et al. — MHC-I peptide/TCR structural biology  
+- Watson JL et al. (2023) — RFdiffusion PPI hotspot conditioning  
+- NetMHCpan motif tables — allele anchor curation  
 
 ---
 
 ## License
 
 MIT License — see [LICENSE](LICENSE).
+
+---
+
+**Version:** 0.3.0 · **Last updated:** June 2025 · **Status:** Active development; feedback welcome via [GitHub Issues](https://github.com/vmbharanidharan-ai/hotspot-identification/issues).
