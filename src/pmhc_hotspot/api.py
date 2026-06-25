@@ -14,6 +14,7 @@ from pmhc_hotspot.features.geometry import GeometryCalculator
 from pmhc_hotspot.features.mutation import MutationScorer
 from pmhc_hotspot.features.positioning import PeptideResidueMap
 from pmhc_hotspot.features.sasa import SASACalculator
+from pmhc_hotspot.features.surface import residue_surface_from_sasa
 from pmhc_hotspot.io import (
     StructureLoader,
     chain_ca_residues,
@@ -87,16 +88,16 @@ class HotspotPredictor:
         hla_residues = [r for chain in hla_chains for r in chain_ca_residues(chain)]
 
         prm = PeptideResidueMap(pep_chain)
-        model = structure[0]
-        all_residues = [r for chain in model for r in chain if r.id[0] == " "]
         preferred_positions = prm.preferred_tcr_positions()
         anchor_positions = get_anchor_positions(self.allele, prm.length)
+        sasa_result = self._sasa.compute(structure)
 
         raw_rows: list[dict] = []
         for i, residue in enumerate(prm.residues):
             aa = residue_aa1(residue)
-            abs_sasa = self._sasa.absolute_sasa(residue, all_residues)
-            rel_sasa = self._sasa.relative_sasa(residue, all_residues, aa)
+            abs_sasa = self._sasa.residue_sasa(residue, sasa_result)
+            rel_sasa = self._sasa.residue_relative_sasa(residue, sasa_result)
+            surface = residue_surface_from_sasa(residue, sasa_result, aa=aa)
             hla_contact_count = self._contacts.hla_contacts(residue, hla_residues)
             pep_contact_count = self._contacts.peptide_neighbors(residue, prm.residues, i)
             buried = self._contacts.is_buried(residue, hla_residues, rel_sasa)
@@ -111,6 +112,10 @@ class HotspotPredictor:
                     "normalized_position": prm.normalized_position(i),
                     "abs_sasa": abs_sasa,
                     "rel_sasa": rel_sasa,
+                    "hydrophobic_sasa": surface.hydrophobic_sasa,
+                    "polar_sasa": surface.polar_sasa,
+                    "hydrophobic_fraction": surface.hydrophobic_fraction,
+                    "polar_fraction": surface.polar_fraction,
                     "protrusion": self._geometry.protrusion(i, prm.residues),
                     "curvature": self._geometry.curvature(i, prm.residues),
                     "bulge": self._geometry.bulge(i, prm.residues),
@@ -183,6 +188,10 @@ class HotspotPredictor:
                     score=score,
                     sasa=row["abs_sasa"],
                     relative_sasa=row["rel_sasa"],
+                    hydrophobic_sasa=row["hydrophobic_sasa"],
+                    polar_sasa=row["polar_sasa"],
+                    hydrophobic_fraction=row["hydrophobic_fraction"],
+                    polar_fraction=row["polar_fraction"],
                     protrusion=row["protrusion"],
                     curvature=row["curvature"],
                     bulge=row["bulge"],

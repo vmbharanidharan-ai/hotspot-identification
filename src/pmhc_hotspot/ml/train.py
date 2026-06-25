@@ -10,6 +10,8 @@ from pmhc_hotspot.ml.model import build_pipeline
 
 FEATURE_COLUMNS = [
     "sasa",
+    "hydrophobic_fraction",
+    "polar_fraction",
     "protrusion",
     "curvature",
     "bulge",

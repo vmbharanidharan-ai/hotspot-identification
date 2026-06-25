@@ -68,6 +68,8 @@ def test_ml_mode_orders_by_model_probability():
         final_model=_DummyModel(),
         feature_columns=[
             "sasa",
+            "hydrophobic_fraction",
+            "polar_fraction",
             "protrusion",
             "curvature",
             "bulge",

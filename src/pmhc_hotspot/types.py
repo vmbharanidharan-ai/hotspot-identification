@@ -20,6 +20,10 @@ class ResidueScore:
     score: float = 0.0
     sasa: float = 0.0
     relative_sasa: float = 0.0
+    hydrophobic_sasa: float = 0.0
+    polar_sasa: float = 0.0
+    hydrophobic_fraction: float = 0.0
+    polar_fraction: float = 0.0
     protrusion: float = 0.0
     curvature: float = 0.0
     bulge: float = 0.0

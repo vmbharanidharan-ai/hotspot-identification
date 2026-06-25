@@ -23,6 +23,8 @@ def residue_scores_to_frame(prediction: PredictionResult) -> pd.DataFrame:
                 "position": r.position,
                 "aa": r.aa,
                 "sasa": r.relative_sasa,
+                "hydrophobic_fraction": r.hydrophobic_fraction,
+                "polar_fraction": r.polar_fraction,
                 "protrusion": r.protrusion,
                 "curvature": r.curvature,
                 "bulge": r.bulge,

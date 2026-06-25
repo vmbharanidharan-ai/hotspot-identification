@@ -33,6 +33,7 @@ classifiers = [
 dependencies = [
     "biopython>=1.83,<2",
     "click>=8.1,<9",
+    "freesasa>=2.2,<3",
     "numpy>=1.26,<2",
     "pandas>=2.0,<3",
     "pyyaml>=6.0,<7",
