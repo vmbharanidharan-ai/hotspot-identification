@@ -8,7 +8,8 @@ def test_predict_returns_result(fixture_pdb):
     assert result.peptide_length == 9
     assert len(result.residue_scores) == 9
     assert all(0.0 <= r.score <= 1.0 for r in result.residue_scores)
-    assert len(result.hotspots) >= 5
+    assert len(result.hotspots) >= 3
+    assert len(result.hotspots) <= 6
     assert result.rfdiffusion_hotspot_res
 
 

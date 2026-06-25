@@ -95,7 +95,7 @@ DEFAULT_WEIGHTS: dict[str, float] = {
 }
 
 DEFAULT_HOTSPOT_CONFIG: dict[str, int] = {
-    "min_hotspots": 5,
+    "min_hotspots": 3,
     "max_hotspots": 6,
     "min_hydrophobic": 3,
     "min_patch_size": 2,

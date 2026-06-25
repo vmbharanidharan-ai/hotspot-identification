@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from pmhc_hotspot.constants import (
     DEFAULT_HOTSPOT_CONFIG,
     HYDROPHOBIC_FOR_INTERFACE,
@@ -11,9 +13,22 @@ from pmhc_hotspot.constants import (
 from pmhc_hotspot.features.allele_rules import get_anchor_positions
 from pmhc_hotspot.types import ResidueScore
 
+logger = logging.getLogger(__name__)
+
 
 def _count_hydrophobic(amino_acids: str) -> int:
     return sum(1 for aa in amino_acids if aa in HYDROPHOBIC_FOR_INTERFACE)
+
+
+def _effective_hydrophobic_requirement(n_selected: int, min_hydrophobic: int) -> int:
+    """Scale hydrophobic count down for smaller hotspot sets (3-4 residues)."""
+    if n_selected <= 0:
+        return 0
+    if n_selected <= 3:
+        return min(min_hydrophobic, 2, n_selected)
+    if n_selected == 4:
+        return min(min_hydrophobic, 2)
+    return min(min_hydrophobic, n_selected)
 
 
 def _position_eligible(
@@ -42,14 +57,14 @@ def select_rfdiffusion_hotspots(
     min_hydrophobic: int | None = None,
 ) -> list[ResidueScore]:
     """
-    Select 5–6 RFdiffusion hotspots with biological design constraints.
+    Select 3-6 RFdiffusion hotspots with biological design constraints.
 
     Rules (from pMHC binder design literature and RFdiffusion PPI practice):
     - Skip MHC-I anchor positions (allele-aware)
     - Skip Pro/Gly; skip N-terminal Ala/Gly (flexible, low contact area)
     - Prefer high-scoring TCR-facing central residues
-    - Require >= min_hydrophobic hydrophobic residues in final set
-    """
+    - Prefer >= min_hydrophobic hydrophobic residues (scaled down for smaller sets)
+  """
     cfg = DEFAULT_HOTSPOT_CONFIG
     min_hotspots = min_hotspots if min_hotspots is not None else cfg["min_hotspots"]
     max_hotspots = max_hotspots if max_hotspots is not None else cfg["max_hotspots"]
@@ -71,19 +86,14 @@ def select_rfdiffusion_hotspots(
     if not candidates:
         raise ValueError("No eligible hotspot candidates after biological filtering")
 
-    candidates.sort(key=lambda x: (-x[0], x[1].position_index))
+    n_candidates = len(candidates)
+    effective_min = min(min_hotspots, n_candidates)
+    effective_max = min(max_hotspots, n_candidates)
+    target = effective_max
+
     primary = [c for c in candidates if (c[1].position_index + 1) in preferred]
     other = [c for c in candidates if c not in primary]
-
-    if len(primary) >= min_hotspots:
-        pool = primary
-        target = min(len(primary), max_hotspots)
-        target = max(target, min_hotspots)
-        if len(primary) == min_hotspots:
-            target = min_hotspots
-    else:
-        pool = primary + other
-        target = min_hotspots
+    pool = primary if len(primary) >= effective_min else primary + other
 
     selected: list[ResidueScore] = []
     selected_positions: set[int] = set()
@@ -96,24 +106,24 @@ def select_rfdiffusion_hotspots(
         selected.append(r)
         selected_positions.add(r.position_index)
 
-    if len(selected) < min_hotspots:
+    if len(selected) < effective_min:
         for _, r in candidates:
-            if len(selected) >= min_hotspots:
+            if len(selected) >= effective_min:
                 break
             if r.position_index not in selected_positions:
                 selected.append(r)
                 selected_positions.add(r.position_index)
 
-    selected.sort(key=lambda r: r.position_index)
+    required_hydrophobic = _effective_hydrophobic_requirement(len(selected), min_hydrophobic)
     aas = "".join(r.aa for r in selected)
 
-    if _count_hydrophobic(aas) < min_hydrophobic:
+    if _count_hydrophobic(aas) < required_hydrophobic:
         for _, r in candidates:
             if r.position_index in selected_positions:
                 continue
             if r.aa not in HYDROPHOBIC_FOR_INTERFACE:
                 continue
-            if len(selected) >= max_hotspots:
+            if len(selected) >= effective_max:
                 replace_idx = next(
                     (i for i, s in enumerate(selected) if s.aa not in HYDROPHOBIC_FOR_INTERFACE),
                     None,
@@ -127,16 +137,15 @@ def select_rfdiffusion_hotspots(
                 selected.append(r)
                 selected_positions.add(r.position_index)
             aas = "".join(s.aa for s in selected)
-            if _count_hydrophobic(aas) >= min_hydrophobic:
+            if _count_hydrophobic(aas) >= required_hydrophobic:
                 break
 
-    if len(selected) < min_hotspots:
-        raise ValueError(
-            f"Only {len(selected)} eligible hotspots; need {min_hotspots}"
-        )
-    if _count_hydrophobic("".join(r.aa for r in selected)) < min_hydrophobic:
-        raise ValueError(
-            f"Could not satisfy hydrophobic requirement (>={min_hydrophobic})"
+    if _count_hydrophobic("".join(r.aa for r in selected)) < required_hydrophobic:
+        logger.warning(
+            "Hydrophobic requirement partially met: %d/%d in %d hotspots",
+            _count_hydrophobic("".join(r.aa for r in selected)),
+            required_hydrophobic,
+            len(selected),
         )
 
     selected.sort(key=lambda r: r.position_index)
