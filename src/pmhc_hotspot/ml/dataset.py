@@ -17,6 +17,7 @@ def build_training_dataset(
     *,
     download: bool = True,
     cache_dir: str = "data/pdb",
+    contact_mode: str = "standard",
 ) -> "pd.DataFrame":
     """Aggregate residue-level training rows from a benchmark manifest."""
     import pandas as pd
@@ -39,7 +40,7 @@ def build_training_dataset(
                 hla_chain=entry.hla_chain,
             )
             prediction = predictor.predict(entry.resolved_pdb_path, select_hotspots=False)
-            contacts = extract_peptide_contact_positions(structure, entry)
+            contacts = extract_peptide_contact_positions(structure, entry, contact_mode=contact_mode)
             labels = {pos: 1 for pos in contacts}
             frame = build_training_frame(
                 prediction,

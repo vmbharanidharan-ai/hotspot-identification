@@ -7,10 +7,15 @@ from pathlib import Path
 
 import numpy as np
 from Bio.PDB import PDBList
-from scipy.spatial.distance import cdist
 
+from pmhc_hotspot.benchmark.contact_labels import (
+    CONTACT_MODES,
+    ContactMode,
+    _atom_coords_and_names,
+    _peptide_tcr_contact_pairs,
+    residue_is_contact,
+)
 from pmhc_hotspot.benchmark.manifest import BenchmarkEntry
-from pmhc_hotspot.constants import CONTACT_CUTOFF_A
 from pmhc_hotspot.data.validation import safe_cache_path, validate_pdb_id
 from pmhc_hotspot.features.positioning import PeptideResidueMap
 from pmhc_hotspot.io import chain_ca_residues, chain_residue_count, get_chain, get_model, infer_peptide_hla_chains
@@ -168,23 +173,23 @@ class PDBDownloader:
         return resolved
 
 
-def _heavy_coords(residue) -> np.ndarray:
-    coords = [a.coord for a in residue if a.element != "H"]
-    return np.array(coords) if coords else np.empty((0, 3))
-
-
-def _chain_heavy_coords(chain) -> np.ndarray:
-    blocks = [_heavy_coords(r) for r in chain_ca_residues(chain)]
-    blocks = [b for b in blocks if len(b)]
-    return np.vstack(blocks) if blocks else np.empty((0, 3))
-
-
-def extract_peptide_contact_positions(structure, entry: BenchmarkEntry) -> set[str]:
+def extract_peptide_contact_positions(
+    structure,
+    entry: BenchmarkEntry,
+    *,
+    contact_mode: ContactMode = "standard",
+) -> set[str]:
     """
-    Return P-position labels for peptide residues within CONTACT_CUTOFF_A of TCR.
+    Return P-position labels for peptide residues contacting the TCR.
 
-  Ground truth for TCR-contact recovery benchmarks.
+    contact_mode:
+      - permissive: any heavy atom <= 5.0 A (legacy-style, loose)
+      - standard: <= 4.5 A with side-chain involvement (default)
+      - strict: <= 3.5 A with peptide side-chain involvement
     """
+    if contact_mode not in CONTACT_MODES:
+        raise ValueError(f"contact_mode must be one of {CONTACT_MODES}")
+
     pep_id, hla_ids = infer_peptide_hla_chains(
         structure,
         entry.peptide_chain,
@@ -203,30 +208,29 @@ def extract_peptide_contact_positions(structure, entry: BenchmarkEntry) -> set[s
             if chain.id not in known and len(chain_ca_residues(chain)) >= 80
         ]
 
-    tcr_coords = []
+    tcr_atom_blocks: list[tuple[np.ndarray, list[str]]] = []
     for chain_id in tcr_chains:
         try:
             chain = get_chain(structure, chain_id)
         except ValueError:
             logger.warning("TCR chain %s missing in %s", chain_id, entry.pdb_id)
             continue
-        coords = _chain_heavy_coords(chain)
-        if len(coords):
-            tcr_coords.append(coords)
+        for residue in chain_ca_residues(chain):
+            coords, names = _atom_coords_and_names(residue)
+            if len(coords):
+                tcr_atom_blocks.append((coords, names))
 
-    if not tcr_coords:
+    if not tcr_atom_blocks:
         logger.warning("No TCR coordinates for %s", entry.pdb_id)
         return set()
 
-    tcr_all = np.vstack(tcr_coords)
-    contacted: set[str] = set()
+    tcr_coords = np.vstack([block[0] for block in tcr_atom_blocks])
+    tcr_names = [name for _, names in tcr_atom_blocks for name in names]
 
+    contacted: set[str] = set()
     for i, residue in enumerate(prm.residues):
-        res_coords = _heavy_coords(residue)
-        if len(res_coords) == 0:
-            continue
-        dists = cdist(res_coords, tcr_all)
-        if (dists <= CONTACT_CUTOFF_A).any():
+        pairs = _peptide_tcr_contact_pairs(residue, tcr_coords, tcr_names)
+        if residue_is_contact(pairs, contact_mode):
             contacted.add(prm.position_label(i))
 
     return contacted

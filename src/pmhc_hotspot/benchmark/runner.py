@@ -10,6 +10,7 @@ from pmhc_hotspot.benchmark.dataset import (
     extract_peptide_contact_positions,
     resolve_benchmark_entry,
 )
+from pmhc_hotspot.benchmark.contact_labels import ContactMode, describe_contact_mode
 from pmhc_hotspot.benchmark.evaluate import aggregate_results, evaluate_structure, results_to_dict
 from pmhc_hotspot.benchmark.manifest import BenchmarkManifest
 
@@ -29,6 +30,7 @@ class BenchmarkRunner:
         top_k: tuple[int, ...] = (1, 3, 5),
         download: bool = False,
         cache_dir: str | Path = "data/pdb",
+        contact_mode: ContactMode = "standard",
     ) -> dict:
         manifest = (
             BenchmarkManifest.default()
@@ -77,7 +79,7 @@ class BenchmarkRunner:
 
                 prediction = predictor.predict(pdb_path)
                 ordered = [r.position for r in prediction.residue_scores]
-                contacts = extract_peptide_contact_positions(structure, entry)
+                contacts = extract_peptide_contact_positions(structure, entry, contact_mode=contact_mode)
 
                 ev = evaluate_structure(
                     pdb_id=entry.pdb_id,
@@ -105,6 +107,8 @@ class BenchmarkRunner:
 
         return {
             "manifest": str(manifest.path),
+            "contact_mode": contact_mode,
+            "contact_mode_description": describe_contact_mode(contact_mode),
             "summary": aggregate_results(results),
             "results": results_to_dict(results),
         }

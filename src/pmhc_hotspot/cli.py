@@ -160,20 +160,29 @@ def validate_cmd(structure_path, peptide_chain, hla_chain):
 @click.option("--allele", default=None, help="Override allele for all structures")
 @click.option("--download/--no-download", default=False, help="Download missing PDBs via PDBList")
 @click.option("--cache-dir", default="data/pdb", show_default=True)
+@click.option(
+    "--contact-mode",
+    default="standard",
+    show_default=True,
+    type=click.Choice(["strict", "standard", "permissive"]),
+    help="TCR-contact ground-truth definition for benchmark labels",
+)
 @click.option("--out", "out_json", default="benchmark_report.json", show_default=True)
-def benchmark_cmd(manifest_path, allele, download, cache_dir, out_json):
+def benchmark_cmd(manifest_path, allele, download, cache_dir, contact_mode, out_json):
     """Run TCR-contact recovery benchmark over curated structures."""
     predictor = HotspotPredictor(allele=allele)
     report = predictor.benchmark(
         manifest_path,
         download=download,
         cache_dir=cache_dir,
+        contact_mode=contact_mode,
     )
     _write_json(out_json, report, indent=2)
     click.echo(f"Wrote {out_json}")
     summary = report.get("summary", {})
     click.echo(f"Structures evaluated: {summary.get('n_structures', 0)}")
     if summary.get("n_structures"):
+        click.echo(f"Contact mode: {report.get('contact_mode', contact_mode)}")
         click.echo(f"Mean recall@5: {summary.get('mean_recall_at_5', 0):.3f}")
         click.echo(f"Mean anchor avoidance@5: {summary.get('mean_anchor_avoidance_at_5', 0):.3f}")
 

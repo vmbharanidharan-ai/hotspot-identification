@@ -254,6 +254,7 @@ class HotspotPredictor:
         top_k: tuple[int, ...] = (1, 3, 5),
         download: bool = False,
         cache_dir: str = "data/pdb",
+        contact_mode: str = "standard",
     ) -> dict:
         """Run benchmark over curated TCR-bound pMHC structures."""
         from pmhc_hotspot.benchmark.runner import BenchmarkRunner
@@ -263,6 +264,7 @@ class HotspotPredictor:
             top_k=top_k,
             download=download,
             cache_dir=cache_dir,
+            contact_mode=contact_mode,
         )
 
     def build_ml_training_frame(self, manifest_path: str | None = None, *, download: bool = True):
