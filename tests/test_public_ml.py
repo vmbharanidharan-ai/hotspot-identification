@@ -15,6 +15,13 @@ def test_load_iedb_native_export():
     assert df["allele"].iloc[0].startswith("HLA-")
 
 
+def test_load_atlas_native_export():
+    df = load_atlas_csv("tests/data/sample_atlas_native.csv", wt_only=True)
+    assert len(df) == 2
+    assert set(df["peptide"]) == {"FLRGRAYGL"}
+    assert set(df["label"]) == {0, 1}
+
+
 def test_combine_public_datasets():
     iedb = load_iedb_csv("tests/data/sample_iedb.csv")
     atlas = load_atlas_csv("tests/data/sample_atlas.csv")

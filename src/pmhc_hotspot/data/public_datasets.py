@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -84,11 +85,38 @@ IEDB_PDB_COLUMNS = [
 IEDB_OBJECT_TYPE_COLUMNS = ["Epitope - Object Type", "epitope - object type"]
 IEDB_MHC_CLASS_COLUMNS = ["MHC Restriction - Class", "mhc restriction - class"]
 
-ATLAS_PEPTIDE_COLUMNS = IEDB_PEPTIDE_COLUMNS + ["Peptide", "peptide_seq", "Peptide Sequence"]
-ATLAS_ALLELE_COLUMNS = IEDB_ALLELE_COLUMNS + ["MHC", "MHC Allele"]
+ATLAS_PEPTIDE_COLUMNS = IEDB_PEPTIDE_COLUMNS + [
+    "PEPseq",
+    "pepseq",
+    "Peptide",
+    "peptide_seq",
+    "Peptide Sequence",
+]
+ATLAS_ALLELE_COLUMNS = IEDB_ALLELE_COLUMNS + [
+    "MHCname",
+    "mhcname",
+    "MHCname_PDB",
+    "MHC",
+    "MHC Allele",
+]
 ATLAS_LABEL_COLUMNS = IEDB_LABEL_COLUMNS + ["Binder", "binder", "Binding"]
-ATLAS_GROUP_COLUMNS = IEDB_GROUP_COLUMNS + ["complex_id", "ATLAS ID", "atlas_id"]
-ATLAS_AFFINITY_COLUMNS = IEDB_AFFINITY_COLUMNS + ["Delta_G", "deltaG", "Affinity"]
+ATLAS_GROUP_COLUMNS = IEDB_GROUP_COLUMNS + ["PMID", "pmid", "complex_id", "ATLAS ID", "atlas_id"]
+ATLAS_DELTA_G_COLUMNS = [
+    "DeltaG_kcal_per_mol",
+    "deltag_kcal_per_mol",
+    "Delta_G",
+    "deltaG",
+]
+ATLAS_KD_COLUMNS = ["Kd_microM", "kd_microm", "Kd", "kd"]
+ATLAS_AFFINITY_COLUMNS = IEDB_AFFINITY_COLUMNS + ATLAS_DELTA_G_COLUMNS + ATLAS_KD_COLUMNS + ["Affinity"]
+ATLAS_PDB_COLUMNS = IEDB_PDB_COLUMNS + ["true_PDB", "template_PDB", "Template PDB", "template_pdb"]
+ATLAS_ASSAY_COLUMNS = IEDB_ASSAY_COLUMNS + ["Exp. Method", "Structure_Method", "Exp Method"]
+ATLAS_PEP_MUT_COLUMNS = ["PEP_mut", "pep_mut"]
+ATLAS_TCR_MUT_COLUMNS = ["TCR_mut", "tcr_mut"]
+
+# ATLAS reports TCR-pMHC affinity; thresholds approximate strong vs weak engagement.
+ATLAS_DELTA_G_BIND_MAX = -6.0  # kcal/mol; more negative = stronger binding
+ATLAS_KD_BIND_MAX_UM = 25.0  # µM
 
 
 @dataclass(frozen=True)
@@ -107,9 +135,10 @@ def _read_table(path: str | Path) -> pd.DataFrame:
     """Read CSV or TSV (IEDB/ATLAS exports)."""
     path = Path(path)
     suffix = path.suffix.lower()
+    na_values = ["\\N", "N/A", "NA", ""]
     if suffix in {".tsv", ".txt"}:
-        return pd.read_csv(path, sep="\t", low_memory=False)
-    return pd.read_csv(path, low_memory=False)
+        return pd.read_csv(path, sep="\t", low_memory=False, na_values=na_values)
+    return pd.read_csv(path, low_memory=False, na_values=na_values)
 
 
 def _column_lookup(df: pd.DataFrame, names: list[str]) -> str | None:
@@ -127,6 +156,53 @@ def _column_lookup(df: pd.DataFrame, names: list[str]) -> str | None:
 def _first_column(df: pd.DataFrame, names: list[str]) -> pd.Series | None:
     col = _column_lookup(df, names)
     return df[col] if col is not None else None
+
+
+def _parse_atlas_measurement(value) -> float | None:
+    """Parse ATLAS affinity strings such as '12.5 +/- 2.1' or '>200'."""
+    if pd.isna(value):
+        return None
+    text = str(value).strip()
+    if text.upper() in {"\\N", "N/A", "NA", "NAN", "NONE", ""}:
+        return None
+    if text.startswith(">"):
+        match = re.search(r"([0-9.]+)", text[1:])
+        return float(match.group(1)) if match else None
+    if text.startswith("<"):
+        match = re.search(r"([0-9.]+)", text[1:])
+        return float(match.group(1)) if match else None
+    match = re.match(r"^([0-9.]+)", text)
+    return float(match.group(1)) if match else None
+
+
+def _parse_measurement_series(series: pd.Series) -> pd.Series:
+    return series.map(_parse_atlas_measurement)
+
+
+def _derive_atlas_labels(delta_g: pd.Series, kd_um: pd.Series) -> pd.Series:
+    """Binary label from ATLAS affinity: 1 = strong, 0 = weak/non-binder."""
+    labels = []
+    for dg, kd in zip(delta_g, kd_um):
+        if pd.notna(dg):
+            labels.append(1 if dg <= ATLAS_DELTA_G_BIND_MAX else 0)
+        elif pd.notna(kd):
+            labels.append(1 if kd <= ATLAS_KD_BIND_MAX_UM else 0)
+        else:
+            labels.append(None)
+    return pd.Series(labels, dtype="object")
+
+
+def _filter_atlas_rows(df: pd.DataFrame, *, wt_only: bool) -> pd.DataFrame:
+    """Keep wild-type peptide rows (and optionally wild-type TCR) for peptide-level pretrain."""
+    out = df
+    pep_mut_col = _column_lookup(df, ATLAS_PEP_MUT_COLUMNS)
+    if pep_mut_col is not None:
+        out = out.loc[out[pep_mut_col].astype(str).str.upper().eq("WT")]
+    if wt_only:
+        tcr_mut_col = _column_lookup(df, ATLAS_TCR_MUT_COLUMNS)
+        if tcr_mut_col is not None:
+            out = out.loc[out[tcr_mut_col].astype(str).str.upper().eq("WT")]
+    return out
 
 
 def _filter_iedb_rows(df: pd.DataFrame, mhc_class_i_only: bool) -> pd.DataFrame:
@@ -238,9 +314,10 @@ def load_iedb_csv(path: str | Path, *, mhc_class_i_only: bool = True) -> pd.Data
     return _clean_public_frame(standardized)
 
 
-def load_atlas_csv(path: str | Path) -> pd.DataFrame:
-    """Load an ATLAS TCR-pMHC export (CSV or TSV)."""
+def load_atlas_csv(path: str | Path, *, wt_only: bool = True) -> pd.DataFrame:
+    """Load an ATLAS TCR-pMHC export (CSV or TSV, native ATLAS headers supported)."""
     df = _read_table(path)
+    df = _filter_atlas_rows(df, wt_only=wt_only)
     standardized = _standardize_frame(
         df,
         "ATLAS",
@@ -248,10 +325,22 @@ def load_atlas_csv(path: str | Path) -> pd.DataFrame:
         allele_cols=ATLAS_ALLELE_COLUMNS,
         label_cols=ATLAS_LABEL_COLUMNS,
         group_cols=ATLAS_GROUP_COLUMNS,
-        assay_cols=IEDB_ASSAY_COLUMNS,
+        assay_cols=ATLAS_ASSAY_COLUMNS,
         affinity_cols=ATLAS_AFFINITY_COLUMNS,
-        pdb_cols=IEDB_PDB_COLUMNS + ["Template PDB", "template_pdb"],
+        pdb_cols=ATLAS_PDB_COLUMNS,
     )
+    delta_g_col = _first_column(df, ATLAS_DELTA_G_COLUMNS)
+    kd_col = _first_column(df, ATLAS_KD_COLUMNS)
+    delta_g = _parse_measurement_series(delta_g_col) if delta_g_col is not None else pd.Series(
+        [None] * len(standardized), index=standardized.index
+    )
+    kd_um = _parse_measurement_series(kd_col) if kd_col is not None else pd.Series(
+        [None] * len(standardized), index=standardized.index
+    )
+    if standardized["label"].isna().all():
+        standardized["label"] = _derive_atlas_labels(delta_g, kd_um)
+    if standardized["affinity"].isna().all():
+        standardized["affinity"] = delta_g.where(delta_g.notna(), kd_um)
     return _clean_public_frame(standardized)
 
 
