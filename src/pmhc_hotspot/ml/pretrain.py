@@ -10,7 +10,11 @@ from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from pmhc_hotspot.data.peptide_features import featurize_peptide_table
+from pmhc_hotspot.data.peptide_features import (
+    POSITION_CATEGORICAL_COLUMNS,
+    POSITION_FEATURE_COLUMNS,
+    featurize_peptide_table,
+)
 from pmhc_hotspot.ml.model import build_base_estimator
 
 PUBLIC_FEATURE_COLUMNS = [
@@ -21,8 +25,8 @@ PUBLIC_FEATURE_COLUMNS = [
     "negative_frac",
     "mean_chemical_score",
     "max_chemical_score",
-]
-PUBLIC_CATEGORICAL = ["allele"]
+] + POSITION_FEATURE_COLUMNS
+PUBLIC_CATEGORICAL = ["allele"] + POSITION_CATEGORICAL_COLUMNS
 
 
 def build_public_pretrain_pipeline(
