@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from pmhc_hotspot.io import residue_aa1
+from pmhc_hotspot.features.spatial import heavy_atoms, min_inter_atomic_distance
 
 
 class GeometryCalculator:
@@ -89,19 +89,15 @@ class GeometryCalculator:
 
     def distance_to_hla_surface(self, residue, hla_residues: list) -> float:
         """Minimum distance from residue heavy atoms to any HLA heavy atom."""
-        res_coords = np.array([a.coord for a in residue if a.element != "H"])
-        if len(res_coords) == 0:
-            return 0.0
-        hla_coords = np.array([a.coord for r in hla_residues for a in r if a.element != "H"])
-        if len(hla_coords) == 0:
-            return 999.0
-        from scipy.spatial.distance import cdist
-
-        return float(cdist(res_coords, hla_coords).min())
+        res_atoms = heavy_atoms(residue)
+        hla_atoms = heavy_atoms(hla_residues)
+        min_dist = min_inter_atomic_distance(res_atoms, hla_atoms)
+        return 999.0 if min_dist == float("inf") else float(min_dist)
 
     def tcr_exposure_prior(self, index: int, peptide_residues: list, preferred_positions: list[int]) -> float:
         """Biological prior for TCR-facing positions and favorable chemistry."""
         from pmhc_hotspot.constants import RESIDUE_CHEMICAL_SCORE
+        from pmhc_hotspot.io import residue_aa1
 
         position_1based = index + 1
         aa = residue_aa1(peptide_residues[index])

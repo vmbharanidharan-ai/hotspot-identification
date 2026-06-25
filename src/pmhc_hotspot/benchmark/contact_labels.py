@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-import numpy as np
-from scipy.spatial.distance import cdist
-
 from pmhc_hotspot.constants import CONTACT_CUTOFF_A
+from pmhc_hotspot.features.spatial import peptide_tcr_contact_pairs
 
 ContactMode = Literal["strict", "standard", "permissive"]
 
@@ -17,55 +15,21 @@ STRICT_CUTOFF_A = 3.5
 STANDARD_CUTOFF_A = CONTACT_CUTOFF_A  # 4.5
 PERMISSIVE_CUTOFF_A = 5.0
 
-_BACKBONE = frozenset({"N", "CA", "C", "O", "OXT"})
-
-
-def _atom_coords_and_names(residue) -> tuple[np.ndarray, list[str]]:
-    coords = []
-    names = []
-    for atom in residue:
-        if atom.element == "H":
-            continue
-        coords.append(atom.coord)
-        names.append(atom.name)
-    if not coords:
-        return np.empty((0, 3)), []
-    return np.array(coords), names
-
 
 def _peptide_tcr_contact_pairs(
     peptide_residue,
-    tcr_coords: np.ndarray,
-    tcr_atom_names: list[str] | None = None,
+    tcr_atoms: list,
 ) -> list[tuple[float, bool, bool]]:
     """
     Return (distance, peptide_sidechain, tcr_sidechain) for qualifying atom pairs.
 
-    If tcr_atom_names is None, TCR atoms are treated as sidechain-capable (conservative).
+    Uses BioPython NeighborSearch on TCR atoms (pairs up to permissive cutoff).
     """
-    pep_coords, pep_names = _atom_coords_and_names(peptide_residue)
-    if len(pep_coords) == 0 or len(tcr_coords) == 0:
-        return []
-
-    if tcr_atom_names is None:
-        tcr_sidechain_mask = np.ones(len(tcr_coords), dtype=bool)
-    else:
-        tcr_sidechain_mask = np.array([n not in _BACKBONE for n in tcr_atom_names])
-
-    pep_sidechain_mask = np.array([n not in _BACKBONE for n in pep_names])
-    dists = cdist(pep_coords, tcr_coords)
-
-    pairs: list[tuple[float, bool, bool]] = []
-    for i in range(dists.shape[0]):
-        for j in range(dists.shape[1]):
-            pairs.append(
-                (
-                    float(dists[i, j]),
-                    bool(pep_sidechain_mask[i]),
-                    bool(tcr_sidechain_mask[j]),
-                )
-            )
-    return pairs
+    return peptide_tcr_contact_pairs(
+        peptide_residue,
+        tcr_atoms,
+        max_distance=PERMISSIVE_CUTOFF_A,
+    )
 
 
 def residue_is_contact(pairs: list[tuple[float, bool, bool]], mode: ContactMode) -> bool:

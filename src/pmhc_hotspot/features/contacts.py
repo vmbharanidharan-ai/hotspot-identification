@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import numpy as np
-from scipy.spatial.distance import cdist
-
 from pmhc_hotspot.constants import BURIED_HLA_CONTACT_THRESHOLD, CONTACT_CUTOFF_A
+from pmhc_hotspot.features.spatial import count_cross_contacts, heavy_atoms
 
 
 class ContactAnalyzer:
@@ -14,21 +12,10 @@ class ContactAnalyzer:
     def __init__(self, cutoff: float = CONTACT_CUTOFF_A):
         self.cutoff = cutoff
 
-    def _heavy_coords(self, residue) -> np.ndarray:
-        coords = [a.coord for a in residue if a.element != "H"]
-        return np.array(coords) if coords else np.empty((0, 3))
-
     def count_contacts(self, res_a, residues_b: list) -> int:
-        a = self._heavy_coords(res_a)
-        if len(a) == 0:
-            return 0
-        blocks = [self._heavy_coords(r) for r in residues_b]
-        blocks = [b for b in blocks if len(b)]
-        if not blocks:
-            return 0
-        b = np.vstack(blocks)
-        d = cdist(a, b)
-        return int((d <= self.cutoff).sum())
+        atoms_a = heavy_atoms(res_a)
+        atoms_b = heavy_atoms(residues_b)
+        return count_cross_contacts(atoms_a, atoms_b, self.cutoff)
 
     def hla_contacts(self, peptide_residue, hla_residues: list) -> int:
         return self.count_contacts(peptide_residue, hla_residues)
@@ -49,7 +36,7 @@ class ContactAnalyzer:
         """
         Buried in HLA groove if high MHC contact count OR very low SASA.
 
-        Separates HLA burial from TCR-facing exposure (Perplexity correction).
+        Separates HLA burial from TCR-facing exposure.
         """
         contacts = self.hla_contacts(peptide_residue, hla_residues)
         return contacts >= contact_threshold or relative_sasa < sasa_threshold

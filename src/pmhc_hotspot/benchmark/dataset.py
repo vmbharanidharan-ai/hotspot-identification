@@ -5,19 +5,18 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-import numpy as np
 from Bio.PDB import PDBList
 
 from pmhc_hotspot.benchmark.contact_labels import (
     CONTACT_MODES,
     ContactMode,
-    _atom_coords_and_names,
     _peptide_tcr_contact_pairs,
     residue_is_contact,
 )
 from pmhc_hotspot.benchmark.manifest import BenchmarkEntry
 from pmhc_hotspot.data.validation import safe_cache_path, validate_pdb_id
 from pmhc_hotspot.features.positioning import PeptideResidueMap
+from pmhc_hotspot.features.spatial import heavy_atoms
 from pmhc_hotspot.io import chain_ca_residues, chain_residue_count, get_chain, get_model, infer_peptide_hla_chains
 
 logger = logging.getLogger(__name__)
@@ -208,28 +207,22 @@ def extract_peptide_contact_positions(
             if chain.id not in known and len(chain_ca_residues(chain)) >= 80
         ]
 
-    tcr_atom_blocks: list[tuple[np.ndarray, list[str]]] = []
+    tcr_atoms: list = []
     for chain_id in tcr_chains:
         try:
             chain = get_chain(structure, chain_id)
         except ValueError:
             logger.warning("TCR chain %s missing in %s", chain_id, entry.pdb_id)
             continue
-        for residue in chain_ca_residues(chain):
-            coords, names = _atom_coords_and_names(residue)
-            if len(coords):
-                tcr_atom_blocks.append((coords, names))
+        tcr_atoms.extend(heavy_atoms(chain_ca_residues(chain)))
 
-    if not tcr_atom_blocks:
+    if not tcr_atoms:
         logger.warning("No TCR coordinates for %s", entry.pdb_id)
         return set()
 
-    tcr_coords = np.vstack([block[0] for block in tcr_atom_blocks])
-    tcr_names = [name for _, names in tcr_atom_blocks for name in names]
-
     contacted: set[str] = set()
     for i, residue in enumerate(prm.residues):
-        pairs = _peptide_tcr_contact_pairs(residue, tcr_coords, tcr_names)
+        pairs = _peptide_tcr_contact_pairs(residue, tcr_atoms)
         if residue_is_contact(pairs, contact_mode):
             contacted.add(prm.position_label(i))
 

@@ -22,6 +22,7 @@ structure → pmhc-hotspot → ranked residues + patches + RFdiffusion export �
 ## Table of contents
 
 - [Why this package exists](#why-this-package-exists)
+- [Design philosophy](#design-philosophy)
 - [Biological rationale](#biological-rationale)
 - [Features](#features)
 - [Installation](#installation)
@@ -54,6 +55,29 @@ Existing tools address **parts** of the problem but not the full design workflow
 
 ---
 
+## Design philosophy
+
+`pmhc-hotspot` combines **standard structural biology tools** with **domain-specific TCR-contact hotspot logic**:
+
+| Task | Tool | Rationale |
+|------|------|-----------|
+| SASA calculation | [FreeSASA](https://github.com/mittinatten/freesasa) | Peer-reviewed, fast, matches NACCESS; native apolar/polar splits |
+| Contact detection | BioPython `NeighborSearch` | Spatial indexing; avoids O(n²) all-pairs distance loops |
+| PDB parsing | BioPython | Community standard |
+| Protrusion / curvature / bulge | **This package** | TCR-facing peptide geometry (domain-specific) |
+| Anchor suppression & hydrophobic rules | **This package** | MHC-I biochemistry for binder design |
+| Hotspot selection (3–6 residues) | **This package** | RFdiffusion-ready, allele-aware filtering |
+| ML on structural TCR contacts | **This package** | Residue-level labels from TCR-bound PDBs |
+| RFdiffusion export | **This package** | `ppi.hotspot_res` tokens and contig templates |
+
+We do **not** reinvent commodity structural calculations. The unique contribution is answering:
+
+> **Which peptide residues should a TCR-mimetic binder contact for RFdiffusion design?**
+
+That is orthogonal to NetMHCpan (binding affinity), NetTCR (sequence recognition), or RFdiffusion itself (scaffold generation).
+
+---
+
 ## Biological rationale
 
 Hotspot selection for pMHC binder design must respect three **distinct** concepts (not a single "exposure" score):
@@ -80,7 +104,9 @@ Proline and glycine are deprioritized (rigid or too flexible for PPI hotspots). 
 
 ## Features
 
-- **Deterministic baseline scorer** — no ML required for v0.1
+- **FreeSASA-backed exposure** — absolute/relative SASA plus apolar/polar surface fractions
+- **BioPython spatial contacts** — efficient HLA burial and peptide-neighbor counts
+- **Deterministic baseline scorer** — no ML required for core workflow
 - **Variable peptide length** — 8–15 residues (not hardcoded to 9-mers)
 - **Normalized, explainable features** — every score decomposes into weighted components
 - **Contiguous patch selection** — spatially coherent targets for RFdiffusion
