@@ -15,10 +15,16 @@ Cursor agents use the reports to propose **one bounded package patch per cycle**
 
 | File | Role |
 |------|------|
-| `.cursor/trainer.md` | Train only; no code edits |
-| `.cursor/analyst.md` | Diagnose bottleneck from reports |
-| `.cursor/patcher.md` | One minimal code fix + test |
-| `.cursor/reviewer.md` | Approve/reject; biology wins over metrics |
+| `.cursor/agents/00_shared_preamble.md` | Shared rules — paste at top of every agent session |
+| `.cursor/agents/01_trainer.md` | Train only; no code edits |
+| `.cursor/agents/02_analyst.md` | Diagnose bottleneck from reports |
+| `.cursor/agents/03_biology_reviewer.md` | Biology pass/fail (can run parallel with Analyst) |
+| `.cursor/agents/04_patcher.md` | One minimal code fix + test |
+| `.cursor/agents/05_reviewer.md` | APPROVE / REJECT |
+
+Full orchestration: **`pmhc-hotspot-dev-plan.md`**
+
+One-shot script (no agents): `bash scripts/run_cycle_once.sh`
 
 ## Operational rhythm
 

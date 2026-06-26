@@ -1,0 +1,4 @@
+"Assay ID - IEDB IRI","Reference - IEDB IRI","Reference - PMID","Epitope - Object Type","Epitope - Name","Assay - Method","Assay - Qualitative Measurement","Assay - Quantitative measurement","Assay - PDB ID","MHC Restriction - Name","MHC Restriction - Class"
+http://www.iedb.org/assay/1800159,http://www.iedb.org/reference/1021091,,Linear peptide,IVDCLTEMYY,purified MHC/competitive/fluorescence,Negative,11287.1,,HLA-B*40:02,I
+http://www.iedb.org/assay/1800160,http://www.iedb.org/reference/1021091,,Linear peptide,GILGFVFTL,purified MHC/competitive/fluorescence,Positive,50.0,1BD2,HLA-A*02:01,I
+http://www.iedb.org/assay/1800161,http://www.iedb.org/reference/1021091,,Linear peptide,NLVPMVATV,purified MHC/competitive/fluorescence,Negative,5000.0,,HLA-A*02:01,I

@@ -95,6 +95,34 @@ def main() -> int:
     with TRAINING_REPORT_PATH.open("w") as fh:
         json.dump(serializable, fh, indent=2, default=str)
 
+    fold_metrics = {
+        "pretrain": (report.get("pretrain_cv") or {}).get("fold_metrics"),
+        "statistical": report["statistical_cv"].get("fold_metrics"),
+        "finetune": report["finetune_cv"].get("fold_metrics"),
+        "finetune_by_peptide_length": report["finetune_cv"].get("by_peptide_length"),
+    }
+    with (REPORTS_DIR / "fold_metrics.json").open("w") as fh:
+        json.dump(fold_metrics, fh, indent=2, default=str)
+
+    failure_slices: dict = {"by_peptide_length": [], "noisy_folds": []}
+    for length, stats in (report["finetune_cv"].get("by_peptide_length") or {}).items():
+        auc = stats.get("roc_auc")
+        if auc is not None and auc == auc and auc < 0.65:
+            failure_slices["by_peptide_length"].append(
+                {"peptide_length": length, "roc_auc": auc, "n": stats.get("n")}
+            )
+    for stage_name, stage in [
+        ("pretrain", report.get("pretrain_cv") or {}),
+        ("statistical", report["statistical_cv"]),
+        ("finetune", report["finetune_cv"]),
+    ]:
+        for fold in stage.get("fold_metrics") or []:
+            auc = fold.get("roc_auc")
+            if auc is not None and auc == auc and auc < 0.60:
+                failure_slices["noisy_folds"].append({"stage": stage_name, **fold})
+    with (REPORTS_DIR / "failure_slices.json").open("w") as fh:
+        json.dump(failure_slices, fh, indent=2, default=str)
+
     if CHAMPION_MODEL_PATH.exists():
         serializable["previous_champion"] = str(CHAMPION_MODEL_PATH)
 
