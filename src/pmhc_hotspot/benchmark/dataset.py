@@ -141,11 +141,12 @@ class PDBDownloader:
             file_format="pdb",
             overwrite=False,
         )
-        fetched_path = Path(fetched)
-        if fetched_path.exists() and fetched_path != out:
-            if out.exists():
-                out.unlink()
-            fetched_path.rename(out)
+        if fetched:
+            fetched_path = Path(fetched)
+            if fetched_path.exists() and fetched_path != out:
+                if out.exists():
+                    out.unlink()
+                fetched_path.rename(out)
         if not out.exists():
             alt = self.cache_dir / f"pdb{pdb_id.lower()}.ent"
             if alt.exists():
@@ -154,10 +155,25 @@ class PDBDownloader:
             raise FileNotFoundError(f"Failed to download PDB {pdb_id}")
         return out
 
-    def ensure_manifest_paths(self, entries: list[BenchmarkEntry]) -> list[BenchmarkEntry]:
+    def ensure_manifest_paths(
+        self,
+        entries: list[BenchmarkEntry],
+        *,
+        skip_missing: bool = True,
+    ) -> list[BenchmarkEntry]:
         resolved: list[BenchmarkEntry] = []
         for entry in entries:
-            path = entry.pdb_path or str(self.download(entry.pdb_id))
+            path: str | None = entry.pdb_path
+            if path and Path(path).exists() and Path(path).stat().st_size > 0:
+                resolved.append(entry)
+                continue
+            try:
+                path = str(self.download(entry.pdb_id))
+            except (FileNotFoundError, OSError, ValueError) as exc:
+                if skip_missing:
+                    logger.warning("Skipping %s: %s", entry.pdb_id, exc)
+                    continue
+                raise
             resolved.append(
                 BenchmarkEntry(
                     pdb_id=entry.pdb_id,

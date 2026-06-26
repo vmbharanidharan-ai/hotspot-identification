@@ -76,3 +76,29 @@ def test_aggregate_results_by_length():
     summary = aggregate_results(rows)
     assert summary["n_structures"] == 2
     assert "8-9" in summary["by_peptide_length"]
+
+
+def test_ensure_manifest_paths_skips_failed_downloads(monkeypatch, tmp_path):
+    from pmhc_hotspot.benchmark.dataset import PDBDownloader
+    from pmhc_hotspot.benchmark.manifest import BenchmarkEntry
+
+    downloader = PDBDownloader(tmp_path)
+
+    def fail_download(pdb_id: str):
+        raise FileNotFoundError(f"Failed to download PDB {pdb_id}")
+
+    monkeypatch.setattr(downloader, "download", fail_download)
+    entries = [
+        BenchmarkEntry("GOOD", "HLA-A*02:01", "C", "A", ("D", "E")),
+        BenchmarkEntry("BAD", "HLA-A*02:01", "C", "A", ("D", "E")),
+    ]
+    # Provide local file for GOOD only
+    good_path = tmp_path / "GOOD.pdb"
+    good_path.write_text("END\n")
+    entries[0] = BenchmarkEntry(
+        "GOOD", "HLA-A*02:01", "C", "A", ("D", "E"), pdb_path=str(good_path)
+    )
+
+    resolved = downloader.ensure_manifest_paths(entries, skip_missing=True)
+    assert len(resolved) == 1
+    assert resolved[0].pdb_id == "GOOD"

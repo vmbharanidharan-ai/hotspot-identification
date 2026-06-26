@@ -25,7 +25,14 @@ def build_training_dataset(
     manifest = BenchmarkManifest.resolve(manifest_path)
     entries = list(manifest)
     if download:
+        before = len(entries)
         entries = PDBDownloader(cache_dir).ensure_manifest_paths(entries)
+        skipped = before - len(entries)
+        if skipped:
+            logger.warning(
+                "Skipped %d manifest entries with missing/unavailable PDB files",
+                skipped,
+            )
 
     frames = []
     for entry in entries:
