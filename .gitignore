@@ -24,6 +24,7 @@ htmlcov/
 
 # Data & outputs
 data/pdb/
+artifacts/
 outputs/
 *.pdb
 !tests/data/*.pdb

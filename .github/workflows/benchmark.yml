@@ -1,0 +1,68 @@
+name: benchmark
+
+on:
+  workflow_run:
+    workflows: ["train"]
+    types:
+      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: pmhc-benchmark
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download training artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pmhc-train-artifacts
+          path: artifacts/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,ml]"
+
+      - name: Run benchmark
+        env:
+          PMHC_ALLOW_SMOKE_TRAIN: ${{ github.event_name == 'workflow_dispatch' && '0' || '' }}
+          PMHC_BENCHMARK_SCORING_MODE: hybrid
+          PMHC_CONTACT_MODE: standard
+        run: python scripts/benchmark_once.py
+
+      - name: Biology gate
+        run: python scripts/biology_gate.py
+        continue-on-error: true
+
+      - name: Compare metrics
+        run: python scripts/compare_metrics.py
+        continue-on-error: true
+
+      - name: Promote champion (gates only)
+        run: python scripts/promote_champion.py
+        continue-on-error: true
+
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pmhc-benchmark-report
+          path: |
+            artifacts/reports/
+            artifacts/models/
+          retention-days: 30

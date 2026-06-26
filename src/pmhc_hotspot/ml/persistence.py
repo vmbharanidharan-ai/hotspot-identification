@@ -10,6 +10,60 @@ from typing import Any
 import joblib
 
 PACKAGE_VERSION = "0.3.0"
+DEFAULT_MODEL_FILENAME = "default_staged_xgb.joblib"
+
+
+def bundled_models_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "models"
+
+
+def default_model_path() -> Path:
+    """Path to the shipped default model bundle (may not exist until promoted)."""
+    return bundled_models_dir() / DEFAULT_MODEL_FILENAME
+
+
+def resolve_model_bundle_path(
+    path: str | Path | None = None,
+    *,
+    allow_missing: bool = False,
+) -> Path | None:
+    """
+    Resolve a model bundle path in priority order:
+
+    1. explicit ``path``
+    2. ``PMHC_HOTSPOT_MODEL`` environment variable
+    3. packaged default under ``pmhc_hotspot/models/``
+    4. local CI champion at ``artifacts/models/staged_xgb.joblib``
+    """
+    import os
+
+    candidates: list[Path] = []
+    if path is not None:
+        candidates.append(Path(path))
+    env_path = os.environ.get("PMHC_HOTSPOT_MODEL")
+    if env_path:
+        candidates.append(Path(env_path))
+    candidates.append(default_model_path())
+    candidates.append(Path("artifacts/models/staged_xgb.joblib"))
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    if allow_missing:
+        return None
+    searched = ", ".join(str(c) for c in candidates)
+    raise FileNotFoundError(
+        f"No model bundle found. Searched: {searched}. "
+        "Train with `python scripts/train_once.py` or pass --ml-bundle."
+    )
+
+
+def resolve_default_model_bundle(*, allow_missing: bool = False) -> StagedModelBundle | None:
+    """Load the default staged model bundle if available."""
+    path = resolve_model_bundle_path(allow_missing=allow_missing)
+    if path is None:
+        return None
+    return load_staged_bundle(path)
 
 
 @dataclass

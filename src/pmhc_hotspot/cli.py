@@ -185,10 +185,10 @@ def benchmark_cmd(
     manifest_path, allele, download, cache_dir, contact_mode, scoring_mode, ml_bundle, out_json
 ):
     """Run TCR-contact recovery benchmark over curated structures."""
+    from pmhc_hotspot.ml.persistence import resolve_default_model_bundle, resolve_model_bundle_path
+
     if scoring_mode in {"ml", "hybrid", "statistical"} and not ml_bundle:
-        raise click.ClickException(
-            "--ml-bundle is required when --scoring-mode is ml, hybrid, or statistical"
-        )
+        ml_bundle = str(resolve_model_bundle_path())
     predictor = HotspotPredictor(allele=allele, ml_bundle=ml_bundle, scoring_mode=scoring_mode)
     report = predictor.benchmark(
         manifest_path,

@@ -73,6 +73,7 @@ packages = ["src/pmhc_hotspot"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/pmhc_hotspot/benchmark/tcr_pmhc_manifest.yaml" = "pmhc_hotspot/benchmark/tcr_pmhc_manifest.yaml"
+"src/pmhc_hotspot/models/README.md" = "pmhc_hotspot/models/README.md"
 
 [tool.hatch.build.targets.sdist]
 include = [

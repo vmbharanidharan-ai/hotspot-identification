@@ -22,7 +22,7 @@ from pmhc_hotspot.io import (
     infer_peptide_hla_chains,
     residue_aa1,
 )
-from pmhc_hotspot.ml.persistence import StagedModelBundle, load_staged_bundle
+from pmhc_hotspot.ml.persistence import StagedModelBundle, load_staged_bundle, resolve_default_model_bundle
 from pmhc_hotspot.scoring.baseline import HotspotScorer
 from pmhc_hotspot.scoring.calibration import minmax_normalize
 from pmhc_hotspot.scoring.patches import PatchSelector
@@ -60,6 +60,8 @@ class HotspotPredictor:
         self.scoring_mode = scoring_mode
         if isinstance(ml_bundle, (str, Path)):
             self.ml_bundle = load_staged_bundle(ml_bundle)
+        elif ml_bundle is None and scoring_mode in {"ml", "hybrid", "statistical"}:
+            self.ml_bundle = resolve_default_model_bundle(allow_missing=True)
         else:
             self.ml_bundle = ml_bundle
 

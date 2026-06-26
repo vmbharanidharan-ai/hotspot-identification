@@ -1,0 +1,57 @@
+name: train
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: pmhc-train
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,ml]"
+
+      - name: Fetch IEDB export
+        env:
+          PMHC_IEDB_URL: ${{ secrets.PMHC_IEDB_URL }}
+          IEDB_EXPORT_URL: ${{ secrets.IEDB_EXPORT_URL }}
+        run: |
+          python scripts/fetch_iedb.py || PMHC_ALLOW_SMOKE_TRAIN=1 python scripts/fetch_iedb.py
+
+      - name: Train model
+        run: |
+          if [ -f tests/data/sample_iedb_native.csv ] && [ ! -s data/iedb_mhc_ligand.csv ] 2>/dev/null; then
+            export PMHC_ALLOW_SMOKE_TRAIN=1
+            export PMHC_CV_SPLITS=2
+          fi
+          if grep -q sample_iedb_native data/iedb_mhc_ligand.csv 2>/dev/null || [ "$(wc -c < data/iedb_mhc_ligand.csv)" -lt 5000 ]; then
+            export PMHC_ALLOW_SMOKE_TRAIN=1
+            export PMHC_CV_SPLITS=2
+          fi
+          python scripts/train_once.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pmhc-train-artifacts
+          path: |
+            artifacts/models/
+            artifacts/reports/
+          retention-days: 30

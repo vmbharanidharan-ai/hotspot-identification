@@ -55,7 +55,6 @@ def build_statistical_pipeline(
     )
 
     estimator = LogisticRegression(
-        penalty="elasticnet",
         solver="saga",
         l1_ratio=l1_ratio,
         C=C,
