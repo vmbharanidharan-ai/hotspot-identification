@@ -19,6 +19,17 @@ BENCHMARK_REPORT_PATH = REPORTS_DIR / "benchmark_report.json"
 BIOLOGY_REPORT_PATH = REPORTS_DIR / "biology_gate.json"
 METRICS_GATE_PATH = REPORTS_DIR / "metrics_gate.json"
 PATCH_BRIEF_PATH = REPORTS_DIR / "patch_brief.json"
+EVAL_BENCHMARK_REPORT_PATH = REPORTS_DIR / "eval_benchmark_report.json"
+EVAL_BASELINE_PATH = REPORTS_DIR / "eval_baseline.json"
+EVAL_COMPARE_PATH = REPORTS_DIR / "eval_compare.json"
+OVERNIGHT_STATE_PATH = REPORTS_DIR / "overnight_state.json"
+AGENT_PROMPTS_DIR = REPORTS_DIR / "agent_prompts"
+AGENT_OUTPUTS_DIR = REPORTS_DIR / "agent_outputs"
+ANALYST_MEMO_PATH = REPORTS_DIR / "analyst_memo.md"
+BIOLOGY_REVIEW_PATH = REPORTS_DIR / "biology_review.md"
+REVIEWER_DECISION_PATH = REPORTS_DIR / "reviewer_decision.md"
+PATCH_CHANGE_NOTE_PATH = REPORTS_DIR / "patch_change_note.md"
+AGENTS_DIR = REPO_ROOT / ".cursor" / "agents"
 
 DEFAULT_IEDB_PATH = Path(os.environ.get("PMHC_IEDB_PATH", REPO_ROOT / "data" / "iedb_mhc_ligand.csv"))
 DEFAULT_PDB_CACHE = Path(os.environ.get("PMHC_PDB_CACHE", REPO_ROOT / "data" / "pdb"))

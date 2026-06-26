@@ -54,6 +54,9 @@ dev = [
     "ruff>=0.5",
     "twine>=5.0",
 ]
+automation = [
+    "cursor-sdk>=0.1.0",
+]
 docs = [
     "myst-parser>=2.0",
     "sphinx>=7.0",

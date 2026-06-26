@@ -27,6 +27,19 @@ def test_anchor_suppression_buried_vs_exposed():
     assert buried_penalty > exposed_penalty
 
 
+def test_pomega_minus_one_soft_penalty_only_for_long_peptides():
+    filt = AnchorFilter("HLA-A*02:01")
+
+    # 10-mer P9 (PΩ-1) gets soft suppression.
+    long_penalty = filt.penalty(9, 10, buried=False, relative_sasa=0.8)
+    assert long_penalty == 0.25
+    assert not filt.is_anchor(9, 10)
+
+    # 9-mer P8 should remain unaffected.
+    short_penalty = filt.penalty(8, 9, buried=False, relative_sasa=0.8)
+    assert short_penalty == 0.0
+
+
 def test_scores_bounded():
     scorer = HotspotScorer("HLA-A*02:01")
     features = {

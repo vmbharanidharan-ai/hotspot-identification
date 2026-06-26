@@ -32,47 +32,38 @@ repo/
 └── src/pmhc_hotspot/
 ```
 
-## Parallel execution model
+## Parallel execution model (package-first overnight)
 
 ```text
-                    ┌─────────────┐
-                    │   Trainer   │  (no code edits)
-                    └──────┬──────┘
-                           │
-         ┌─────────────────┼─────────────────┐
-         ▼                 ▼                 ▼
-  benchmark_once     biology_gate      (CI scripts)
-         │                 │
-         └────────┬────────┘
-                  ▼
-           ┌─────────────┐     parallel OK
-           │   Analyst   │◄────┐
-           └──────┬──────┘     │
-                  │      ┌─────┴──────────────┐
-                  ▼      │ Biology Reviewer   │
-           ┌─────────────┐     (parallel OK)
-           │   Patcher   │
-           └──────┬──────┘
-                  ▼
-           ┌─────────────┐
-           │  Reviewer   │
-           └──────┬──────┘
-                  │ APPROVE
-                  ▼
-         retrain → biology gate → promote
+eval_package_benchmark (fixed 11 PDBs)
+        │
+        ▼
+   biology gate
+        │
+   ┌────┴────┐
+   ▼         ▼
+ Analyst   Biology Reviewer   ← parallel (Cursor SDK or manual prompts)
+   └────┬────┘
+        ▼
+     Patcher                    ← one subsystem only
+        ▼
+     Reviewer
+        │ APPROVE
+        ▼
+  pytest + re-eval             ← package improved if recall@5 ↑
 ```
 
 | Phase | Agents | Parallel? |
 |-------|--------|-----------|
-| 1 | Trainer | alone |
-| 2 | Biology Reviewer + Analyst (after benchmark) | **yes** |
-| 3 | Patcher (one subsystem) | after Analyst |
+| 1 | Eval + biology gate | scripts only |
+| 2 | Analyst + Biology Reviewer | **yes** |
+| 3 | Patcher | after Analyst |
 | 4 | Reviewer | after Patcher |
-| 5 | Retrain + gates | if APPROVE |
+| 5 | pytest + re-eval | if APPROVE |
 
-**Hard caps:** one patch per cycle; one promotion per cycle; biology gate before promotion.
+**Overnight entrypoint:** `bash scripts/run_overnight_loop.sh`
 
-## How to launch agents in Cursor
+Legacy train-first loop:
 
 Paste the shared preamble, then the role file, into separate agent sessions:
 

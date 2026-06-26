@@ -6,24 +6,24 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> fetch IEDB (if needed)"
-python scripts/fetch_iedb.py || PMHC_ALLOW_SMOKE_TRAIN=1 python scripts/fetch_iedb.py
+"$PYTHON" scripts/fetch_iedb.py || PMHC_ALLOW_SMOKE_TRAIN=1 "$PYTHON" scripts/fetch_iedb.py
 
 echo "==> train"
-python scripts/train_once.py
+"$PYTHON" scripts/train_once.py
 
 echo "==> benchmark"
-python scripts/benchmark_once.py
+"$PYTHON" scripts/benchmark_once.py
 
 echo "==> biology gate"
-python scripts/biology_gate.py
+"$PYTHON" scripts/biology_gate.py
 
 echo "==> metrics gate"
-python scripts/compare_metrics.py || true
+"$PYTHON" scripts/compare_metrics.py || true
 
 echo "==> promote (if gates pass)"
-python scripts/promote_champion.py || true
+"$PYTHON" scripts/promote_champion.py || true
 
 echo "==> patch brief"
-python scripts/generate_patch_brief.py
+"$PYTHON" scripts/generate_patch_brief.py
 
 echo "==> done — inspect artifacts/reports/patch_brief.json"

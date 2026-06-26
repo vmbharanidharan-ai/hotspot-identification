@@ -11,6 +11,7 @@ from pmhc_hotspot.automation.metrics_gate import load_json
 from pmhc_hotspot.automation.paths import (
     BENCHMARK_REPORT_PATH,
     BIOLOGY_REPORT_PATH,
+    EVAL_BENCHMARK_REPORT_PATH,
     METRICS_GATE_PATH,
     PATCH_BRIEF_PATH,
     REPORTS_DIR,
@@ -52,6 +53,8 @@ def main() -> int:
 
     training = load_json(TRAINING_REPORT_PATH)
     benchmark = load_json(BENCHMARK_REPORT_PATH)
+    if EVAL_BENCHMARK_REPORT_PATH.exists():
+        benchmark = load_json(EVAL_BENCHMARK_REPORT_PATH)
     biology = load_json(BIOLOGY_REPORT_PATH)
     gate = load_json(METRICS_GATE_PATH)
 
