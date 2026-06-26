@@ -72,6 +72,31 @@ pmhc-hotspot export-design --config configs/design.yaml
 
 Writes `artifacts/design_inputs/{target_id}/{random,exposed_only,central_only,predicted}.yaml`.
 
+### Feature enrichment
+
+```bash
+pmhc-hotspot compute-features --config configs/features.yaml
+```
+
+Populates `residue_features` on each `ComplexExample` JSON (in-place by default).
+
+### M6 — Design validation (stub mode)
+
+```bash
+pmhc-hotspot run-design-validation --config configs/eval.yaml
+```
+
+Writes `artifacts/metrics/{target_id}/ranking_report.json` and gatekeeper verdict.
+Uses proxy metrics until AF2/MPNN outputs exist (`ranking.af2_multimer: true` in config).
+
+### Full pipeline
+
+```bash
+python scripts/run_pipeline.py all
+```
+
+Runs: ingest → features → design-export → design-eval (+ gatekeeper).
+
 ### Outputs
 
 | Path | Description |
@@ -178,7 +203,9 @@ For overnight SDK loops, use `screen`/`tmux` and `launch_design_cycle.py`; inges
 
 ## What’s next (M3–M7)
 
-- **M3** — feature tables attached to each `ComplexExample`
-- **M6+** — RFdiffusion / MPNN / AF2 on HPC (external binaries)
+- **M3** — docking geometry prior (`docking_prior` flag in features config; never a label)
+- **M4** — GNN prototype vs XGBoost baseline
+- **M6 live** — wire ProteinMPNN / AF2 outputs (set `ranking.af2_multimer: true` in eval config)
+- **M7** — frozen benchmark release + leaderboard
 
 See `pmhc-hotspot-dev-plan.md` for the full milestone table.

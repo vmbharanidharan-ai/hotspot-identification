@@ -20,6 +20,9 @@ PHASE_AGENTS = {
 }
 
 
+DEFAULT_SEQUENCE = ["ingest", "features", "design-export", "design-eval", "gatekeeper"]
+
+
 @dataclass
 class AgentDispatch:
     phase: str

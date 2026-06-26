@@ -88,6 +88,40 @@ def run_design_export() -> int:
     return 0 if report.exported or not report.skipped else 1
 
 
+def run_features() -> int:
+    """Attach ResidueFeatures to ComplexExample JSON."""
+    from pmhc_hotspot.features.config import FeatureComputeConfig
+    from pmhc_hotspot.preprocess import enrich_examples
+
+    config_path = REPO_ROOT / "configs" / "features.yaml"
+    cfg = FeatureComputeConfig.from_yaml(config_path)
+    report = enrich_examples(cfg, repo_root=REPO_ROOT)
+    print(f"Enriched {len(report.enriched)} examples")
+    print(f"Skipped {len(report.skipped)} examples")
+    if report.skipped:
+        for row in report.skipped[:5]:
+            print(f"  skip {row.get('path')}: {row.get('error')}")
+    return 0 if report.enriched or not report.skipped else 1
+
+
+def run_design_eval_phase() -> int:
+    """M6: ranking reports + gatekeeper verdict (stub when AF2 not wired)."""
+    from pmhc_hotspot.eval import EvalConfig, run_design_eval, run_gatekeeper
+
+    config_path = REPO_ROOT / "configs" / "eval.yaml"
+    cfg = EvalConfig.from_yaml(config_path)
+    report = run_design_eval(cfg, repo_root=REPO_ROOT)
+    print(f"Evaluated {len(report.targets)} targets → {cfg.metrics_dir}/")
+    if report.skipped:
+        for row in report.skipped[:5]:
+            print(f"  skip {row.get('target_id')}: {row.get('error')}")
+
+    decisions = run_gatekeeper(cfg, repo_root=REPO_ROOT)
+    for decision in decisions:
+        print(f"Gatekeeper {decision.target_id}: {decision.verdict}")
+    return 0 if report.targets or not report.skipped else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -101,6 +135,8 @@ def main() -> int:
     configs = {}
     if args.phase in {"ingest", "all"}:
         configs["dataset"] = _load_config("dataset")
+    if args.phase in {"features", "all"}:
+        configs["features"] = _load_config("features")
     if args.phase in {"design-export", "all"}:
         configs["design"] = _load_config("design")
     if args.phase in {"design-eval", "all"}:
@@ -112,13 +148,18 @@ def main() -> int:
 
     if args.phase == "ingest":
         return run_ingest()
+    if args.phase == "features":
+        return run_features()
     if args.phase == "design-export":
         return run_design_export()
+    if args.phase == "design-eval":
+        return run_design_eval_phase()
     if args.phase == "all":
-        code = run_ingest()
-        if code != 0:
-            return code
-        return run_design_export()
+        for step in (run_ingest, run_features, run_design_export, run_design_eval_phase):
+            code = step()
+            if code != 0:
+                return code
+        return 0
 
     print("Next: invoke Cursor orchestrator agent or SDK launcher.")
     print("  IDE: ask the orchestrator subagent to run the next phase")

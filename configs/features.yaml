@@ -1,0 +1,8 @@
+# Feature computation (M1 / feature agent)
+seed: 42
+examples_glob: "data/processed/examples/**/*.json"
+in_place: true
+output_dir: artifacts/features
+scoring_mode: deterministic
+model_bundle: null
+docking_prior: false

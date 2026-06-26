@@ -575,5 +575,54 @@ def export_design_cmd(config_path, output_dir):
             click.echo(f"  skip {row.get('example_id')}: {row.get('error')}", err=True)
 
 
+@main.command("compute-features")
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True),
+    default="configs/features.yaml",
+    show_default=True,
+)
+@click.option(
+    "--examples-glob",
+    default=None,
+    help="Override example JSON glob pattern",
+)
+def compute_features_cmd(config_path, examples_glob):
+    """Attach ResidueFeatures to ComplexExample JSON files."""
+    from pmhc_hotspot.features.config import FeatureComputeConfig
+    from pmhc_hotspot.preprocess import enrich_examples
+
+    cfg = FeatureComputeConfig.from_yaml(config_path)
+    if examples_glob:
+        cfg.examples_glob = examples_glob
+
+    report = enrich_examples(cfg)
+    click.echo(f"Enriched {len(report.enriched)} examples")
+    click.echo(f"Skipped {len(report.skipped)} examples")
+
+
+@main.command("run-design-validation")
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True),
+    default="configs/eval.yaml",
+    show_default=True,
+)
+@click.option("--no-gatekeeper", is_flag=True, help="Skip gatekeeper verdict write")
+def run_design_validation_cmd(config_path, no_gatekeeper):
+    """M6: compare control groups and write ranking reports (stub mode by default)."""
+    from pmhc_hotspot.eval import EvalConfig, run_design_eval, run_gatekeeper
+
+    cfg = EvalConfig.from_yaml(config_path)
+    report = run_design_eval(cfg)
+    click.echo(f"Evaluated {len(report.targets)} targets → {cfg.metrics_dir}/")
+    if not no_gatekeeper:
+        decisions = run_gatekeeper(cfg)
+        for decision in decisions:
+            click.echo(f"Gatekeeper {decision.target_id}: {decision.verdict}")
+
+
 if __name__ == "__main__":
     main()

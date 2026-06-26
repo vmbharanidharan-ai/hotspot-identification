@@ -10,12 +10,11 @@ description: >-
 ## Quick commands
 
 ```bash
-# Phase 1 ingest (no API key)
 pmhc-hotspot build-dataset --config configs/dataset.yaml
-python scripts/run_pipeline.py ingest
-
-# Tests
-pytest tests/test_preprocess.py tests/test_schema.py -q
+pmhc-hotspot compute-features --config configs/features.yaml
+pmhc-hotspot export-design --config configs/design.yaml
+pmhc-hotspot run-design-validation --config configs/eval.yaml
+python scripts/run_pipeline.py all
 ```
 
 Full runbook: `docs/DESIGN_PIPELINE_RUNBOOK.md`  
