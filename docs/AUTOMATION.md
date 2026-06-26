@@ -26,6 +26,13 @@ Full orchestration: **`pmhc-hotspot-dev-plan.md`**
 
 One-shot script (no agents): `bash scripts/run_cycle_once.sh`
 
+STCRDab training manifest:
+
+```bash
+python scripts/stcrdab_to_manifest.py /path/to/stcrdab_summary.tsv
+pmhc-hotspot ml-staged --manifest data/training_manifest.yaml --iedb data/iedb_mhc_ligand.csv --download
+```
+
 ## Operational rhythm
 
 1. **Train** — produces `artifacts/models/staged_xgb.joblib`
