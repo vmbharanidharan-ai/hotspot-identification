@@ -45,6 +45,25 @@ def test_compare_metrics_passes_strong_candidate():
     assert result["passed"] is True
 
 
+def test_compare_metrics_allows_small_auc_noise_within_tolerance():
+    baseline = {
+        "training": {"finetune_roc_auc": 0.850},
+        "benchmark": {"hybrid": {"mean_recall_at_5": None}},
+    }
+    training = {"finetune_cv": {"overall": {"roc_auc": 0.8487}}}
+    benchmark = {
+        "scoring_mode": "hybrid",
+        "summary": {"mean_recall_at_5": 0.777},
+    }
+    result = compare_metrics(
+        training_report=training,
+        benchmark_report=benchmark,
+        baseline=baseline,
+        auc_tolerance=0.005,
+    )
+    assert result["passed"] is True
+
+
 def test_compare_metrics_fails_regression():
     training = {"finetune_cv": {"overall": {"roc_auc": 0.50}}}
     benchmark = {"scoring_mode": "hybrid", "summary": {"mean_recall_at_5": 0.10}}
