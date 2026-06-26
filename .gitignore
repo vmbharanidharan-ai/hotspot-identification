@@ -26,6 +26,7 @@ htmlcov/
 data/pdb/
 artifacts/
 outputs/
+hotspots.tsv
 *.pdb
 !tests/data/*.pdb
 !examples/*.pdb

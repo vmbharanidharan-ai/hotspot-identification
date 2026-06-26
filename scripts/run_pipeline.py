@@ -73,6 +73,21 @@ def run_ingest() -> int:
     return 0 if report.built or not report.skipped else 1
 
 
+def run_design_export() -> int:
+    """M5: export four control-group conditioning YAML per target."""
+    from pmhc_hotspot.design import DesignExportConfig, export_design_inputs
+
+    config_path = REPO_ROOT / "configs" / "design.yaml"
+    cfg = DesignExportConfig.from_yaml(config_path)
+    report = export_design_inputs(cfg, repo_root=REPO_ROOT)
+    print(f"Exported {len(report.exported)} conditioning files → {cfg.output_dir}/")
+    print(f"Skipped {len(report.skipped)} targets")
+    if report.skipped:
+        for row in report.skipped[:5]:
+            print(f"  skip {row.get('example_id')}: {row.get('error')}")
+    return 0 if report.exported or not report.skipped else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -95,8 +110,15 @@ def main() -> int:
     print(f"Run manifest: {manifest_path}")
     print(f"Phase: {args.phase}")
 
-    if args.phase in {"ingest", "all"}:
+    if args.phase == "ingest":
         return run_ingest()
+    if args.phase == "design-export":
+        return run_design_export()
+    if args.phase == "all":
+        code = run_ingest()
+        if code != 0:
+            return code
+        return run_design_export()
 
     print("Next: invoke Cursor orchestrator agent or SDK launcher.")
     print("  IDE: ask the orchestrator subagent to run the next phase")

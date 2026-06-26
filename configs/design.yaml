@@ -1,8 +1,10 @@
 # Design-conditioning export (M5)
 seed: 42
-scoring_mode: hybrid
+scoring_mode: deterministic
 model_bundle: null  # path to staged_xgb.joblib
 output_dir: artifacts/design_inputs
+examples_glob: data/processed/examples/holdout/*.json
+hotspot_count: 4
 control_groups:
   - random
   - exposed_only

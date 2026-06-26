@@ -61,7 +61,16 @@ Flags:
 
 ```bash
 python scripts/run_pipeline.py ingest
+python scripts/run_pipeline.py design-export
 ```
+
+### M5 — Design export (four control groups)
+
+```bash
+pmhc-hotspot export-design --config configs/design.yaml
+```
+
+Writes `artifacts/design_inputs/{target_id}/{random,exposed_only,central_only,predicted}.yaml`.
 
 ### Outputs
 
@@ -167,10 +176,9 @@ For overnight SDK loops, use `screen`/`tmux` and `launch_design_cycle.py`; inges
 
 ---
 
-## What’s next (M3–M5)
+## What’s next (M3–M7)
 
 - **M3** — feature tables attached to each `ComplexExample`
-- **M5** — `design/export.py` → four control groups per target in `artifacts/design_inputs/`
 - **M6+** — RFdiffusion / MPNN / AF2 on HPC (external binaries)
 
 See `pmhc-hotspot-dev-plan.md` for the full milestone table.

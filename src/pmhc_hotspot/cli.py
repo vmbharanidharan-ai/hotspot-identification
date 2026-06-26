@@ -544,5 +544,36 @@ def build_dataset_cmd(config_path, download, stcrdab, processed_dir):
             click.echo(f"  skip {row.get('pdb_id')}: {row.get('error')}", err=True)
 
 
+@main.command("export-design")
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True),
+    default="configs/design.yaml",
+    show_default=True,
+    help="Design export YAML config",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(),
+    default=None,
+    help="Override artifacts/design_inputs output directory",
+)
+def export_design_cmd(config_path, output_dir):
+    """M5: export design-conditioning YAML for all control groups."""
+    from pmhc_hotspot.design import DesignExportConfig, export_design_inputs
+
+    cfg = DesignExportConfig.from_yaml(config_path)
+    if output_dir:
+        cfg.output_dir = Path(output_dir)
+
+    report = export_design_inputs(cfg)
+    click.echo(f"Exported {len(report.exported)} files → {cfg.output_dir}/")
+    click.echo(f"Skipped {len(report.skipped)} targets")
+    if report.skipped:
+        for row in report.skipped[:5]:
+            click.echo(f"  skip {row.get('example_id')}: {row.get('error')}", err=True)
+
+
 if __name__ == "__main__":
     main()
