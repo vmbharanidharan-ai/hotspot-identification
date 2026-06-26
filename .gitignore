@@ -32,3 +32,4 @@ outputs/
 
 # Docs build
 docs/_build/
+data/iedb_mhc_ligand.csv
