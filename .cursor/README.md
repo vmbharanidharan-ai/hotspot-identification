@@ -1,55 +1,28 @@
-# Cursor agents for pmhc-hotspot
+# Cursor agents — binder-conditioning pipeline
 
-Native Cursor **subagents** live in `.cursor/agents/` with YAML frontmatter (`name`, `description`).
+See **`pmhc-hotspot-dev-plan.md`** for milestones and orchestration.
 
-## Subagents
+| Subagent | Role |
+|----------|------|
+| `orchestrator` | Dispatch cycle; call gatekeeper |
+| `ingest` | Structures → `ComplexExample` JSON |
+| `feature` | Residue features |
+| `model` | Train baseline / GNN |
+| `design` | `DesignConditioning` YAML + RFdiffusion prep |
+| `eval` | MPNN/AF2 metrics vs controls |
+| `gatekeeper` | APPROVE_PROMOTE / REJECT / RETRY |
+| `docking` | M3 geometry priors only (inactive until approved) |
 
-| Subagent | File | When to use |
-|----------|------|-------------|
-| `overnight-orchestrator` | `overnight-orchestrator.md` | Start one full package-improvement cycle |
-| `analyst` | `analyst.md` | Diagnose bottleneck (read-only) |
-| `biology-reviewer` | `biology-reviewer.md` | Biology pass/fail (read-only) |
-| `patcher` | `patcher.md` | One minimal code fix + test |
-| `reviewer` | `reviewer.md` | APPROVE / REJECT patch |
-| `trainer` | `trainer.md` | Retrain only when explicitly requested |
+Legacy numbered agents (`01_trainer` …) are superseded by this layout.
 
-Shared rules: `agents/00_shared_preamble.md` (inlined into SDK prompts automatically).
-
-## Parallel agents (IDE)
-
-To run the overnight loop **inside Cursor** with true parallel subagents:
-
-1. Say: **"Use the overnight-orchestrator subagent"**
-2. Phase 2 launches **`analyst`** and **`biology-reviewer` in parallel** (one turn, two subagent delegations).
-3. If patch needed: **`patcher`** → **`reviewer`** sequentially.
-
-Or repeat cycles with the loop skill:
+**Start a cycle:**
 
 ```
-/loop 12h Use the overnight-orchestrator subagent for one package-improvement cycle
+Use the orchestrator subagent to run one design-conditioning cycle per pmhc-hotspot-dev-plan.md
 ```
 
-## Parallel agents (SDK / unattended)
-
-For shell/CI overnight runs with `CURSOR_API_KEY`:
+**Pipeline CLI:**
 
 ```bash
-pip install -e ".[automation]"
-export CURSOR_API_KEY=cursor_...
-
-# Full cycle (metrics + parallel SDK agents + validate)
-bash scripts/run_overnight_loop.sh
-
-# Agents only (separate Agent.create per role, ThreadPoolExecutor)
-python scripts/launch_parallel_agents.py --phase parallel
+python scripts/run_pipeline.py design-export
 ```
-
-SDK uses `Agent.create()` per role (not `Agent.prompt()` one-shots) so analyst and biology-reviewer run concurrently.
-
-## Metrics-only (no agents)
-
-```bash
-PMHC_OVERNIGHT_SKIP_AGENTS=1 bash scripts/run_overnight_loop.sh
-```
-
-See `docs/AUTOMATION.md` and `pmhc-hotspot-dev-plan.md` for data-split and biology rules.

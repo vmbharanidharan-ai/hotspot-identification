@@ -49,13 +49,17 @@ benchmark = []
 dev = [
     "black>=24.0",
     "build>=1.0",
+    "pydantic>=2.0,<3",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.5",
     "twine>=5.0",
 ]
-automation = [
-    "cursor-sdk>=0.1.0",
+schema = [
+    "pydantic>=2.0,<3",
+]
+design = [
+    "pydantic>=2.0,<3",
 ]
 docs = [
     "myst-parser>=2.0",

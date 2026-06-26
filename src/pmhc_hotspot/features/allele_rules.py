@@ -147,16 +147,10 @@ class AnchorFilter:
 
         0 = no penalty; 1 = full suppression (score multiplied by 0).
         """
-        suppression = float(self.rule["suppression"])
-
-        # Softly down-weight PΩ-1 in longer peptides where this residue often
-        # sits at the groove exit and can be over-ranked as a TCR hotspot.
-        # This intentionally does not apply to 9-mers.
-        if peptide_length >= 10 and position_1based == peptide_length - 1:
-            return suppression * 0.5
-
         if not self.is_anchor(position_1based, peptide_length):
             return 0.0
+
+        suppression = float(self.rule["suppression"])
 
         if buried:
             return suppression

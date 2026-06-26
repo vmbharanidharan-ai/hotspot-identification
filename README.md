@@ -1,6 +1,10 @@
 # pmhc-hotspot
 
-**Predict TCR-binding hotspots on peptide–MHC complexes for structure-guided TCR-mimetic binder design.**
+**Structure-first residue prioritization for TCR-mimetic binder design.**
+
+pmhc-hotspot is a structure-first residue prioritization tool that bridges solved peptide–MHC structures to RFdiffusion hotspot conditioning. It combines interpretable structural features, allele-aware biological heuristics, optional statistical/ML refinement, and RFdiffusion export into a reproducible pipeline for TCR-mimetic binder design.
+
+> **Scope.** pmhc-hotspot predicts residues that are likely to participate in TCR recognition based on structural trends observed in deposited complexes. Training labels come from **one TCR bound to one peptide** in each structure; another TCR may recognize the same peptide with a different contact footprint. This is not just a caveat of this package—it reflects a fundamental limitation of structure-based pMHC prioritization.
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml/badge.svg)](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml)
@@ -41,7 +45,7 @@ Designing **TCR-mimetic binders** (proteins that recognize pMHC like a TCR) requ
 
 1. Many peptide positions anchor the peptide in the MHC groove rather than facing the TCR.
 2. Curated TCR–pMHC structural data are sparse (on the order of tens to low hundreds of complexes in the PDB).
-3. TCR recognition is specific; different TCRs can contact the same peptide differently.
+3. TCR recognition is clonotype-specific; labels in any one structure reflect a single TCR footprint, not all possible recognition modes (see scope note at the top of this README).
 
 ### The solution
 
@@ -69,11 +73,11 @@ structure → pmhc-hotspot → ranked residues + patches + export → RFdiffusio
 
 - **No TCR sequence required** — predicts from pMHC structure alone
 - **Fast** — scores a typical pMHC complex in under a second
-- **Biologically grounded** — MHC anchor rules, burial, hydrophobic design constraints
+- **Incorporates structural and biochemical priors from pMHC biology** — MHC anchor rules, burial, hydrophobic design constraints
 - **ML-enhanced (optional)** — staged pretrain + structural fine-tune; hybrid scoring at inference
 - **RFdiffusion-ready** — `ppi.hotspot_res` tokens and contig strings
 - **Transparent** — per-residue score breakdown via `explain`
-- **Built on proven tools** — FreeSASA, BioPython, scikit-learn/XGBoost
+- **Built on established structural biology software** — FreeSASA, BioPython, scikit-learn/XGBoost
 
 > **Important:** This is **structural design prioritization**, not a predictor of T-cell activation, immunogenicity, or MHC binding affinity.
 
@@ -128,7 +132,7 @@ structure → pmhc-hotspot → ranked residues + patches + export → RFdiffusio
 | PDB parsing | BioPython | Standard structural I/O |
 | ML (optional) | scikit-learn / XGBoost | Small-data tabular models with grouped CV |
 
-### Our contribution (novel IP)
+### Methods implemented in pmhc-hotspot
 
 | Component | What it does |
 |-----------|--------------|
@@ -235,6 +239,37 @@ print(result.contig_template)           # e.g. "C1-9/0 A1-275/0 50-80"
 for h in result.hotspots:
     print(h.position, h.aa, f"{h.score:.3f}")
 ```
+
+### Example output
+
+```bash
+pmhc-hotspot run examples/minimal_pmhc.pdb --allele 'HLA-A*02:01'
+```
+
+```
+Wrote hotspots.tsv
+Allele: HLA-A*02:01
+Peptide (P): GALVYRFWL
+RFdiffusion hotspots: P3,P4,P5,P6,P7,P8
+```
+
+Per-residue scores (`python3 examples/quickstart.py` on the same structure):
+
+```
+Peptide: GALVYRFWL
+RFdiffusion hotspots: P3,P4,P5,P6,P7,P8
+Contig: P1-9/0 H1-20/0 50-80
+
+Pos    AA   Score    Buried   Anchor
+P3     L    0.421    False    False
+P4     V    0.292    True     False
+P5     Y    0.273    True     False
+P6     R    0.441    True     False
+P7     F    0.274    True     False
+P8     W    0.269    True     False
+```
+
+`hotspots.tsv` lists all peptide positions with scores; selected hotspots are flagged for export.
 
 ### ML-enhanced prediction
 
@@ -561,14 +596,19 @@ Use **`standard`** for training and primary reporting.
 
 ## Limitations & caveats
 
+### Single-TCR labels (fundamental)
+
+Benchmark and training labels mark residues contacted by **the TCR present in each deposited structure**. That footprint is one realization of peptide recognition. A different TCR targeting the same peptide–MHC complex may use overlapping but non-identical contacts. pmhc-hotspot therefore prioritizes residues supported by **structural trends across complexes**, not clonotype-specific epitope mapping. For TCR-sequence-aware prediction, use tools such as NetTCR or related models alongside structural analysis.
+
+### Other limitations
+
 1. **Small structural training set** — 11 PDBs in the default manifest; generalization to unseen alleles/structures is limited. Use `ml-holdout` before trusting ML on new data.
 2. **HLA-A\*02:01 bias** — Most benchmark structures are A\*02:01; other alleles use generic or curated rules with less validation.
-3. **Generic TCR contacts** — Labels come from *a* TCR in the crystal structure, not your clonotype of interest.
-4. **Peptide length** — 10–11 mers show lower recall@5 than 8–9 mers.
-5. **No immunogenicity** — Hotspots ≠ immunodominance.
-6. **Assumes MHC binding** — Input peptide should already be a plausible binder (validate with NetMHCpan/MHCflurry first).
-7. **Structure quality** — Missing atoms, high B-factors, or low-confidence regions reduce reliability (`validate` + `explain`).
-8. **RFdiffusion loop unvalidated** — Hotspot export is provided; designed binder contact rates are not yet systematically benchmarked in this package.
+3. **Peptide length** — 10–11 mers show lower recall@5 than 8–9 mers.
+4. **No immunogenicity** — Hotspots ≠ immunodominance.
+5. **Assumes MHC binding** — Input peptide should already be a plausible binder (validate with NetMHCpan/MHCflurry first).
+6. **Structure quality** — Missing atoms, high B-factors, or low-confidence regions reduce reliability (`validate` + `explain`).
+7. **RFdiffusion loop unvalidated** — Hotspot export is provided; designed binder contact rates are not yet systematically benchmarked in this package.
 
 ### Recommended ensemble workflow
 

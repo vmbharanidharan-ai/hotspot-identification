@@ -1,0 +1,19 @@
+# Design-conditioning export (M5)
+seed: 42
+scoring_mode: hybrid
+model_bundle: null  # path to staged_xgb.joblib
+output_dir: artifacts/design_inputs
+control_groups:
+  - random
+  - exposed_only
+  - central_only
+  - predicted
+rfdiffusion:
+  num_designs: 100
+  binder_length_min: 50
+  binder_length_max: 80
+  submit: false  # true when HPC runner wired
+proteinmpnn:
+  enabled: false
+af2:
+  enabled: false

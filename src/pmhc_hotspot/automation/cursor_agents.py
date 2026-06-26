@@ -1,79 +1,116 @@
-"""Launch Cursor SDK agents in parallel (separate Agent.create per role)."""
+"""Dispatch binder-conditioning pipeline phases via the Cursor SDK."""
 
 from __future__ import annotations
 
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, Optional
 
-from pmhc_hotspot.automation.overnight import build_agent_prompt
-from pmhc_hotspot.automation.paths import AGENT_OUTPUTS_DIR, AGENTS_DIR, REPO_ROOT
+REPO_ROOT = Path(__file__).resolve().parents[3]
+AGENTS_DIR = REPO_ROOT / ".cursor" / "agents"
 
-ROLE_FILES = {
-    "analyst": "analyst.md",
-    "biology_reviewer": "biology-reviewer.md",
-    "patcher": "patcher.md",
-    "reviewer": "reviewer.md",
+PHASE_AGENTS = {
+    "ingest": "ingest",
+    "features": "feature",
+    "design-export": "design",
+    "design-eval": "eval",
+    "gatekeeper": "gatekeeper",
+    "orchestrator": "orchestrator",
 }
 
-DEFAULT_MODEL = os.environ.get("PMHC_AGENT_MODEL", "composer-2.5")
+
+@dataclass
+class AgentDispatch:
+    phase: str
+    agent_name: str
+    prompt: str
 
 
-def sdk_available() -> bool:
-    try:
-        import cursor_sdk  # noqa: F401
-
-        return bool(os.environ.get("CURSOR_API_KEY"))
-    except ImportError:
-        return False
-
-
-def role_prompt(role: str, *, extra: str = "") -> str:
-    filename = ROLE_FILES[role]
-    path = AGENTS_DIR / filename
+def _read_agent_instructions(agent_name: str) -> str:
+    path = AGENTS_DIR / f"{agent_name}.md"
     if not path.exists():
-        raise FileNotFoundError(f"Missing subagent file: {path}")
-    return build_agent_prompt(filename, extra=extra)
+        raise FileNotFoundError(f"Missing agent definition: {path}")
+    text = path.read_text()
+    if text.startswith("---"):
+        end = text.find("---", 3)
+        if end != -1:
+            text = text[end + 3 :].lstrip()
+    return text.strip()
 
 
-def run_sdk_agent(role: str, prompt: str) -> dict:
-    """One isolated Cursor SDK agent (own Agent.create lifecycle)."""
-    AGENT_OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = AGENT_OUTPUTS_DIR / f"{role}.txt"
+def build_phase_prompt(phase: str, *, extra: str = "") -> AgentDispatch:
+    agent_name = PHASE_AGENTS.get(phase, "orchestrator")
+    instructions = _read_agent_instructions(agent_name)
+    body = (
+        f"You are running pipeline phase **{phase}** for pmhc-hotspot.\n\n"
+        f"{instructions}\n\n"
+        "Repo root is the current working directory. "
+        "Read `pmhc-hotspot-dev-plan.md` and `configs/*.yaml` before editing.\n"
+        "Run tests for any code you change (`pytest tests/ -q`).\n"
+    )
+    if extra:
+        body += f"\nAdditional context:\n{extra}\n"
+    return AgentDispatch(phase=phase, agent_name=agent_name, prompt=body)
 
-    from cursor_sdk import Agent, AgentOptions, LocalAgentOptions
 
-    api_key = os.environ["CURSOR_API_KEY"]
+def run_phase_sdk(
+    phase: str,
+    *,
+    api_key: Optional[str] = None,
+    model: str = "composer-2.5",
+    extra: str = "",
+    stream: bool = False,
+) -> str:
+    """
+    Run one pipeline phase headlessly with the Cursor SDK.
+
+    Requires: pip install cursor-sdk
+    Auth: set CURSOR_API_KEY (https://cursor.com/dashboard → Integrations / API keys)
+    """
+    key = api_key or os.environ.get("CURSOR_API_KEY")
+    if not key:
+        raise RuntimeError(
+            "CURSOR_API_KEY is required for SDK agents. "
+            "Create one at https://cursor.com/dashboard — IDE subagents do not need this."
+        )
+
     try:
-        with Agent.create(
-            AgentOptions(
-                api_key=api_key,
-                model=DEFAULT_MODEL,
-                local=LocalAgentOptions(cwd=str(REPO_ROOT)),
-            ),
-        ) as agent:
-            run = agent.send(prompt)
-            run.wait()
-            text = run.text() if hasattr(run, "text") else ""
-            if not text:
-                result = run.wait()
-                text = getattr(result, "result", "") or str(result)
-            out_path.write_text(text or "")
-            return {
-                "role": role,
-                "status": "ok",
-                "output_path": str(out_path),
-                "text_preview": (text or "")[:500],
-            }
-    except Exception as exc:
-        return {"role": role, "status": "error", "error": str(exc)}
+        from cursor_sdk import Agent, AgentOptions, LocalAgentOptions
+    except ImportError as exc:
+        raise RuntimeError("Install the SDK: pip install cursor-sdk") from exc
+
+    dispatch = build_phase_prompt(phase, extra=extra)
+    options = AgentOptions(
+        api_key=key,
+        model=model,
+        local=LocalAgentOptions(cwd=str(REPO_ROOT)),
+    )
+
+    if stream:
+        with Agent.create(options) as agent:
+            run = agent.send(dispatch.prompt)
+            chunks: list[str] = []
+            for event in run.stream():
+                if event.type == "assistant":
+                    for block in event.message.content:
+                        if block.type == "text":
+                            chunks.append(block.text)
+            return "".join(chunks)
+
+    result = Agent.prompt(dispatch.prompt, options)
+    return str(getattr(result, "result", result))
 
 
-def launch_parallel(roles: list[str], *, extra_by_role: dict[str, str] | None = None) -> list[dict]:
-    extra_by_role = extra_by_role or {}
-    prompts = {role: role_prompt(role, extra=extra_by_role.get(role, "")) for role in roles}
-    results: list[dict] = []
-    with ThreadPoolExecutor(max_workers=max(1, len(roles))) as pool:
-        futures = {pool.submit(run_sdk_agent, role, prompts[role]): role for role in roles}
-        for future in as_completed(futures):
-            results.append(future.result())
-    return results
+def run_cycle_sdk(
+    phases: Iterable[str],
+    *,
+    api_key: Optional[str] = None,
+    model: str = "composer-2.5",
+) -> list[tuple[str, str]]:
+    """Run multiple phases sequentially (orchestrator last if included)."""
+    outputs: list[tuple[str, str]] = []
+    for phase in phases:
+        text = run_phase_sdk(phase, api_key=api_key, model=model, stream=True)
+        outputs.append((phase, text))
+    return outputs

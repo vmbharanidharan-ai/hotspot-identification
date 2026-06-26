@@ -1,0 +1,21 @@
+# Dataset build configuration (M2)
+seed: 42
+raw_dir: data/raw
+processed_dir: data/processed
+cache_dir: data/pdb
+sources:
+  - stcrdab
+  - pdb_manifest
+stcrdab:
+  path: null  # path to STCRDab summary TSV
+  max_resolution: 3.5
+  tcr_type: abtcr
+  exclude_eval_pdbs: true
+splits:
+  holdout_manifest: src/pmhc_hotspot/benchmark/tcr_pmhc_manifest.yaml
+  train_fraction: 0.85
+  val_fraction: 0.10
+  test_fraction: 0.05
+output:
+  examples_glob: "data/processed/examples/{split}/*.json"
+  manifest: data/processed/dataset_manifest.json

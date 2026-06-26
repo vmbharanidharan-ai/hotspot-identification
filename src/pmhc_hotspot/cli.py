@@ -499,5 +499,50 @@ def ml_holdout_cmd(
     click.echo(f"Wrote {out_json}")
 
 
+@main.command("build-dataset")
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True),
+    default="configs/dataset.yaml",
+    show_default=True,
+    help="Dataset build YAML config",
+)
+@click.option("--download/--no-download", default=None, help="Override config download flag")
+@click.option(
+    "--stcrdab",
+    type=click.Path(exists=True),
+    default=None,
+    help="STCRDab summary TSV (adds stcrdab source)",
+)
+@click.option(
+    "--processed-dir",
+    type=click.Path(),
+    default=None,
+    help="Output directory for ComplexExample JSON",
+)
+def build_dataset_cmd(config_path, download, stcrdab, processed_dir):
+    """Phase 1 ingest: build ComplexExample JSON from PDB manifests."""
+    from pmhc_hotspot.preprocess import DatasetBuildConfig, build_dataset
+
+    cfg = DatasetBuildConfig.from_yaml(config_path)
+    if download is not None:
+        cfg.download = download
+    if stcrdab:
+        cfg.stcrdab_path = Path(stcrdab)
+        if "stcrdab" not in cfg.sources:
+            cfg.sources.append("stcrdab")
+    if processed_dir:
+        cfg.processed_dir = Path(processed_dir)
+
+    report = build_dataset(cfg)
+    click.echo(f"Built {len(report.built)} examples → {cfg.processed_dir}/examples/")
+    click.echo(f"Skipped {len(report.skipped)} structures")
+    click.echo(f"Manifest: {cfg.output_manifest}")
+    if report.skipped:
+        for row in report.skipped[:5]:
+            click.echo(f"  skip {row.get('pdb_id')}: {row.get('error')}", err=True)
+
+
 if __name__ == "__main__":
     main()
