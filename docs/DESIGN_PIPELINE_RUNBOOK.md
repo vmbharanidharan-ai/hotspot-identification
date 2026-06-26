@@ -201,11 +201,21 @@ For overnight SDK loops, use `screen`/`tmux` and `launch_design_cycle.py`; inges
 
 ---
 
-## What’s next (M3–M7)
+## What’s next (M4–M7)
 
-- **M3** — docking geometry prior (`docking_prior` flag in features config; never a label)
 - **M4** — GNN prototype vs XGBoost baseline
-- **M6 live** — wire ProteinMPNN / AF2 outputs (set `ranking.af2_multimer: true` in eval config)
+- **M6 HPC** — submit `rfdiffusion_jobs.json` to cluster; drop results as `candidates.csv` (see `experiments/candidates_template.csv`)
 - **M7** — frozen benchmark release + leaderboard
+
+### M3 docking prior (optional)
+
+Enable geometry consensus priors on features (never labels):
+
+```bash
+# configs/features.yaml → docking_prior: true
+pmhc-hotspot compute-features --config configs/features.yaml
+```
+
+Populates `docking_contact_prior` on each `ResidueFeatures` entry using `configs/docking.yaml`.
 
 See `pmhc-hotspot-dev-plan.md` for the full milestone table.

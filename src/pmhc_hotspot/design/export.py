@@ -294,6 +294,17 @@ def export_design_inputs(
             logger.warning("Skipping %s: %s", example.example_id, exc)
             report.skipped.append({"example_id": example.example_id, "error": str(exc)})
 
+    if config.write_job_manifests and report.exported:
+        from pmhc_hotspot.design.jobs import export_job_manifests
+
+        examples_by_target = {ex.example_id: ex.structure_path for ex in items}
+        jobs_dir = config.output_dir if config.output_dir.is_absolute() else repo_root / config.output_dir
+        job_report = export_job_manifests(
+            jobs_dir,
+            examples_by_target=examples_by_target,
+        )
+        report.exported.extend(job_report.written)
+
     report_path = config.output_dir / "export_report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report.to_dict(), indent=2))

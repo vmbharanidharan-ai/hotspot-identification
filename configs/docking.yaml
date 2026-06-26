@@ -1,0 +1,11 @@
+# M3 docking geometry prior (feature only — never labels)
+enabled: true
+method: geometry_consensus
+ensemble_size: 1
+weights:
+  relative_sasa: 0.35
+  protrusion: 0.25
+  bulge: 0.20
+  tcr_exposure_prior: 0.15
+  chemical_norm: 0.05
+output_dir: artifacts/docking_priors

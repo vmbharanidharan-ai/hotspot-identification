@@ -1,0 +1,2 @@
+candidate_id,control_group,target_id,seed,backbone_path,sequence_path,af2_ipae,af2_plddt,interface_pae,interface_rmsd,interface_contacts,buried_surface_area,hotspot_contact_fraction,rosetta_interface_score,rank
+1BD2_predicted_001,predicted,1BD2_HLA-A0201,42,design_outputs/1BD2/predicted/backbone_001.pdb,design_outputs/1BD2/predicted/seq_001.fa,8.2,82.1,6.5,2.1,24,1200.5,0.62,-12.4,1

@@ -30,6 +30,7 @@ class DesignExportConfig:
     rfdiffusion_num_designs: int = 100
     binder_length_min: int = 50
     binder_length_max: int = 80
+    write_job_manifests: bool = True
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "DesignExportConfig":
@@ -53,4 +54,5 @@ class DesignExportConfig:
             rfdiffusion_num_designs=int(rfd.get("num_designs", 100)),
             binder_length_min=int(rfd.get("binder_length_min", 50)),
             binder_length_max=int(rfd.get("binder_length_max", 80)),
+            write_job_manifests=bool(data.get("write_job_manifests", True)),
         )

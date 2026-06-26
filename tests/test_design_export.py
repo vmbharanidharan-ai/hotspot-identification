@@ -51,6 +51,7 @@ def test_export_all_control_groups(minimal_example: Path):
         output_dir=output_dir,
         examples_glob=str(minimal_example / "examples" / "holdout" / "*.json"),
         hotspot_count=3,
+        write_job_manifests=False,
     )
     report = export_design_inputs(cfg, repo_root=minimal_example)
     assert len(report.exported) == 4
@@ -72,6 +73,7 @@ def test_random_control_is_seed_stable(minimal_example: Path):
         output_dir=output_dir,
         examples_glob=str(minimal_example / "examples" / "holdout" / "*.json"),
         hotspot_count=3,
+        write_job_manifests=False,
     )
     export_design_inputs(cfg, repo_root=minimal_example)
     first = yaml.safe_load(

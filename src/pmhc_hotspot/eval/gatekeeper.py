@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from pmhc_hotspot.eval.config import EvalConfig
+from pmhc_hotspot.eval.leakage import find_eval_leakage
 from pmhc_hotspot.schema.design_eval import DesignEvalReport
 
 
@@ -28,7 +29,20 @@ class GatekeeperDecision:
         )
 
 
-def decide_from_report(report: DesignEvalReport, config: EvalConfig) -> GatekeeperDecision:
+def decide_from_report(
+    report: DesignEvalReport,
+    config: EvalConfig,
+    *,
+    leakage: list[str] | None = None,
+) -> GatekeeperDecision:
+    if leakage:
+        return GatekeeperDecision(
+            verdict="REJECT",
+            target_id=report.target_id,
+            beats=[],
+            notes=f"Eval leakage detected: {', '.join(leakage)}",
+        )
+
     beats = [g.value for g in report.predicted_beats_controls]
     if beats:
         verdict = "APPROVE_PROMOTE"
@@ -57,11 +71,16 @@ def run_gatekeeper(
     target_ids: Optional[Iterable[str]] = None,
     *,
     repo_root: Path | None = None,
+    dataset_manifest: Path | None = None,
 ) -> list[GatekeeperDecision]:
     root = repo_root or Path.cwd()
     metrics_dir = config.metrics_dir if config.metrics_dir.is_absolute() else root / config.metrics_dir
     reports_dir = root / "artifacts" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest_path = dataset_manifest or root / "data/processed/dataset_manifest.json"
+    processed_dir = root / "data/processed"
+    leakage = find_eval_leakage(processed_dir, manifest_path if manifest_path.exists() else None)
 
     if target_ids is None:
         target_ids = sorted(
@@ -76,7 +95,7 @@ def run_gatekeeper(
         if not report_path.exists():
             continue
         report = load_ranking_report(report_path)
-        decision = decide_from_report(report, config)
+        decision = decide_from_report(report, config, leakage=leakage)
         report.gatekeeper_verdict = decision.verdict
         report_path.write_text(json.dumps(report.model_dump(mode="json"), indent=2))
         (reports_dir / f"gatekeeper_{target_id}.md").write_text(decision.to_markdown())

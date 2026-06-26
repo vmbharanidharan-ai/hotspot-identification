@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from pmhc_hotspot.api import HotspotPredictor
+from pmhc_hotspot.docking import DockingPriorConfig, compute_docking_priors
 from pmhc_hotspot.schema.examples import ComplexExample, ResidueFeatures
 from pmhc_hotspot.types import ResidueScore
 
 
-def residue_score_to_features(score: ResidueScore) -> ResidueFeatures:
+def residue_score_to_features(
+    score: ResidueScore,
+    *,
+    docking_contact_prior: Optional[float] = None,
+) -> ResidueFeatures:
     return ResidueFeatures(
         position=score.position,
         position_index=score.position_index,
@@ -30,7 +36,7 @@ def residue_score_to_features(score: ResidueScore) -> ResidueFeatures:
         tcr_exposure_prior=score.tcr_exposure_prior,
         buried=score.is_buried,
         is_anchor=score.is_anchor,
-        docking_contact_prior=None,
+        docking_contact_prior=docking_contact_prior,
     )
 
 
@@ -40,6 +46,8 @@ def compute_example_features(
     scoring_mode: str = "deterministic",
     model_bundle: Path | None = None,
     repo_root: Path | None = None,
+    docking_prior: bool = False,
+    docking_config: Path | None = None,
 ) -> list[ResidueFeatures]:
     """Compute per-residue features for one ComplexExample."""
     root = repo_root or Path.cwd()
@@ -62,7 +70,29 @@ def compute_example_features(
             f"Feature length mismatch for {example.example_id}: "
             f"{len(result.residue_scores)} vs {example.peptide_length}"
         )
-    return [residue_score_to_features(r) for r in result.residue_scores]
+
+    priors_by_index: dict[int, float] = {}
+    if docking_prior:
+        dock_cfg_path = docking_config or Path("configs/docking.yaml")
+        if not dock_cfg_path.is_absolute():
+            dock_cfg_path = root / dock_cfg_path
+        dock_cfg = DockingPriorConfig.from_yaml(dock_cfg_path)
+        for score, prior in zip(
+            result.residue_scores,
+            compute_docking_priors(result.residue_scores, dock_cfg),
+        ):
+            priors_by_index[score.position_index] = prior
+
+    ordered_scores = sorted(result.residue_scores, key=lambda r: r.position_index)
+    return [
+        residue_score_to_features(
+            score,
+            docking_contact_prior=priors_by_index.get(score.position_index)
+            if docking_prior
+            else None,
+        )
+        for score in ordered_scores
+    ]
 
 
 def enrich_example(
@@ -71,12 +101,15 @@ def enrich_example(
     scoring_mode: str = "deterministic",
     model_bundle: Path | None = None,
     repo_root: Path | None = None,
+    docking_prior: bool = False,
+    docking_config: Path | None = None,
 ) -> ComplexExample:
     features = compute_example_features(
         example,
         scoring_mode=scoring_mode,
         model_bundle=model_bundle,
         repo_root=repo_root,
+        docking_prior=docking_prior,
+        docking_config=docking_config,
     )
-    features.sort(key=lambda f: f.position_index)
     return example.model_copy(update={"residue_features": features})

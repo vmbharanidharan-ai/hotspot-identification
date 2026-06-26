@@ -62,6 +62,8 @@ def enrich_examples(
                 scoring_mode=config.scoring_mode,
                 model_bundle=config.model_bundle,
                 repo_root=repo_root,
+                docking_prior=config.docking_prior,
+                docking_config=config.docking_config,
             )
             if config.in_place:
                 out_path = path

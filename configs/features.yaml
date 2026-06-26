@@ -6,3 +6,4 @@ output_dir: artifacts/features
 scoring_mode: deterministic
 model_bundle: null
 docking_prior: false
+docking_config: configs/docking.yaml

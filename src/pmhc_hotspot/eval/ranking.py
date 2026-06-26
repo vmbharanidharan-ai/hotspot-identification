@@ -71,6 +71,47 @@ def stub_primary_metric(
     return 10.0 + offset - mean_conf + noise
 
 
+_METRIC_FIELDS = (
+    "interface_rmsd",
+    "interface_pae",
+    "interface_contacts",
+    "buried_surface_area",
+    "rosetta_interface_score",
+    "af2_plddt",
+    "af2_ipae",
+    "hotspot_contact_fraction",
+)
+
+
+def _parse_float(value: str | None) -> float | None:
+    if value in (None, ""):
+        return None
+    return float(value)
+
+
+def _row_to_candidate(
+    row: dict,
+    control_group: ControlGroup,
+    target_id: str,
+    primary_metric: str,
+) -> DesignCandidateMetrics:
+    kwargs = {
+        field: _parse_float(row.get(field))
+        for field in _METRIC_FIELDS
+        if row.get(field) not in (None, "")
+    }
+    return DesignCandidateMetrics(
+        candidate_id=row.get("candidate_id", ""),
+        control_group=control_group,
+        target_id=target_id,
+        seed=int(row.get("seed", 0) or 0),
+        backbone_path=row.get("backbone_path") or None,
+        sequence_path=row.get("sequence_path") or None,
+        rank=int(row["rank"]) if row.get("rank") not in (None, "") else None,
+        **kwargs,
+    )
+
+
 def _read_output_candidates(
     path: Path,
     control_group: ControlGroup,
@@ -83,20 +124,10 @@ def _read_output_candidates(
     with path.open() as fh:
         reader = csv.DictReader(fh)
         for row in reader:
-            value = row.get(primary_metric)
-            metric_value = float(value) if value not in (None, "") else None
-            rows.append(
-                DesignCandidateMetrics(
-                    candidate_id=row.get("candidate_id", ""),
-                    control_group=control_group,
-                    target_id=target_id,
-                    seed=int(row.get("seed", 0)),
-                    af2_ipae=metric_value if primary_metric == "af2_ipae" else None,
-                    hotspot_contact_fraction=(
-                        metric_value if primary_metric == "hotspot_contact_fraction" else None
-                    ),
-                )
-            )
+            candidate = _row_to_candidate(row, control_group, target_id, primary_metric)
+            if getattr(candidate, primary_metric, None) is None:
+                continue
+            rows.append(candidate)
     return rows
 
 
