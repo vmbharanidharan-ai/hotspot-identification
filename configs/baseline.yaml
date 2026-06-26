@@ -1,0 +1,19 @@
+# M4 baseline vs GNN comparison
+seed: 42
+n_splits: 5
+contact_mode: standard
+cache_dir: data/pdb
+download: false
+holdout_manifest: src/pmhc_hotspot/benchmark/tcr_pmhc_manifest.yaml
+training_manifest: tests/data/benchmark_mini.yaml
+exclude_holdout_from_training: false
+output_report: artifacts/reports/gnn_vs_xgboost.json
+xgboost:
+  model_type: xgboost
+gnn:
+  hidden_dim: 32
+  num_layers: 2
+  dropout: 0.1
+  epochs: 120
+  lr: 0.001
+  weight_decay: 0.0001

@@ -201,9 +201,20 @@ For overnight SDK loops, use `screen`/`tmux` and `launch_design_cycle.py`; inges
 
 ---
 
-## What’s next (M4–M7)
+### M4 — GNN vs XGBoost
 
-- **M4** — GNN prototype vs XGBoost baseline
+Requires the GNN extra (PyTorch + XGBoost):
+
+```bash
+pip install -e ".[gnn]"
+pmhc-hotspot ml-compare --config configs/baseline.yaml --download
+```
+
+Writes `artifacts/reports/gnn_vs_xgboost.json` with grouped CV ROC-AUC for both models.
+
+For STCRDab-scale training, set `training_manifest` in `configs/baseline.yaml` and keep `exclude_holdout_from_training: true`.
+
+## What’s next (M6–M7)
 - **M6 HPC** — submit `rfdiffusion_jobs.json` to cluster; drop results as `candidates.csv` (see `experiments/candidates_template.csv`)
 - **M7** — frozen benchmark release + leaderboard
 

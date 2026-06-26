@@ -31,6 +31,7 @@ Build spec: `pmhc-hotspot-dev-plan.md`
 |-------|-------|-------------------|
 | ingest | ingest | `preprocess/`, `labels/`, ingest tests |
 | features | feature | `features/`, feature matrix |
+| model | model | `ml/`, `ml/gnn/`, `configs/baseline.yaml` |
 | design-export | design | `design/`, `patches/`, `artifacts/design_inputs/` |
 | design-eval | eval | `eval/`, `artifacts/metrics/` |
 | gatekeeper | gatekeeper | reports only, verdict JSON |

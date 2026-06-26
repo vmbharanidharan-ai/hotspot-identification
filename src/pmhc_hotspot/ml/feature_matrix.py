@@ -25,6 +25,7 @@ def build_training_frame(
                 "allele": allele,
                 "peptide_length": peptide_length or prediction_result.peptide_length,
                 "position": r.position,
+                "position_index": r.position_index,
                 "aa": r.aa,
                 "sasa": r.relative_sasa,
                 "hydrophobic_fraction": r.hydrophobic_fraction,

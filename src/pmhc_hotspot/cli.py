@@ -575,6 +575,46 @@ def export_design_cmd(config_path, output_dir):
             click.echo(f"  skip {row.get('example_id')}: {row.get('error')}", err=True)
 
 
+@main.command("ml-compare")
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True),
+    default="configs/baseline.yaml",
+    show_default=True,
+    help="Baseline vs GNN comparison config",
+)
+@click.option("--manifest", "manifest_path", default=None, help="Override training manifest")
+@click.option("--download/--no-download", default=None, help="Override config download flag")
+@click.option("--out", "out_json", default=None, help="Override output report path")
+def ml_compare_cmd(config_path, manifest_path, download, out_json):
+    """M4: grouped CV comparing XGBoost vs peptide GNN on the same labels."""
+    from pmhc_hotspot.ml.gnn import BaselineCompareConfig, run_baseline_compare
+
+    cfg = BaselineCompareConfig.from_yaml(config_path)
+    if manifest_path:
+        cfg.training_manifest = Path(manifest_path)
+    if download is not None:
+        cfg.download = download
+    if out_json:
+        cfg.output_report = Path(out_json)
+
+    try:
+        report = run_baseline_compare(cfg)
+    except ImportError as exc:
+        raise click.ClickException(str(exc)) from exc
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    cmp = report["comparison"]
+    click.echo(f"Rows: {report['n_rows']} | structures: {report.get('n_structures')}")
+    click.echo(f"XGBoost ROC-AUC: {cmp['xgboost_roc_auc']:.3f}")
+    click.echo(f"GNN ROC-AUC: {cmp['gnn_roc_auc']:.3f}")
+    click.echo(f"GNN − XGBoost: {cmp['gnn_minus_xgboost_roc_auc']:+.3f}")
+    click.echo(f"GNN beats XGBoost: {cmp['gnn_beats_xgboost']}")
+    click.echo(f"Wrote {report['output_report']}")
+
+
 @main.command("compute-features")
 @click.option(
     "--config",
