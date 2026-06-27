@@ -10,7 +10,7 @@ pmhc-hotspot is a structure-first residue prioritization tool that bridges solve
 [![CI](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml/badge.svg)](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Quick links:** [Installation](#installation) · [Quick start](#quick-start) · [Nature Methods pipeline](#nature-methods-pipeline-phases-05) · [How it works](#how-it-works) · [Design philosophy](#design-philosophy) · [Performance](#performance--validation) · [FAQ](#faq)
+**Quick links:** [Installation](#installation) · [Quick start](#quick-start) · [Full pipeline](#full-pipeline-phases-05) · [How it works](#how-it-works) · [Design philosophy](#design-philosophy) · [Performance](#performance--validation) · [FAQ](#faq)
 
 ---
 
@@ -31,7 +31,7 @@ pmhc-hotspot is a structure-first residue prioritization tool that bridges solve
 13. [RFdiffusion integration](#rfdiffusion-integration)
 14. [Troubleshooting](#troubleshooting)
 15. [FAQ](#faq)
-16. [Nature Methods pipeline (Phases 0–5)](#nature-methods-pipeline-phases-05)
+16. [Full pipeline (Phases 0–5)](#full-pipeline-phases-05)
 17. [Development](#development)
 18. [Citation](#citation)
 19. [License](#license)
@@ -194,7 +194,7 @@ pip install -e ".[gnn]"
 # torch-geometric: install separately per https://pytorch-geometric.readthedocs.io
 ```
 
-See [INSTALL.md](INSTALL.md) for the full Nature Methods setup and [docs/NATURE_METHODS_RUNBOOK.md](docs/NATURE_METHODS_RUNBOOK.md) for Longleaf HPC steps.
+See [INSTALL.md](INSTALL.md) for the extended setup guide and [docs/FULL_PIPELINE_RUNBOOK.md](docs/FULL_PIPELINE_RUNBOOK.md) for Longleaf HPC steps.
 
 ### conda
 
@@ -755,9 +755,9 @@ No. pmhc-hotspot **selects hotspots**; RFdiffusion **generates binders** conditi
 
 ---
 
-## Nature Methods pipeline (Phases 0–5)
+## Full pipeline (Phases 0–5)
 
-Scaffold for the 16-week Nature Methods plan: dataset expansion, design validation, GNN training, benchmark bundle, and wet-lab handoff.
+Scaffold for dataset expansion, design validation, GNN training, benchmark bundle, and wet-lab handoff.
 
 ### Local pipeline
 
@@ -770,7 +770,7 @@ pmhc-hotspot label-contacts --pdb-dir data/pdb --workers 4
 pmhc-hotspot expand-dataset
 
 # Phase 2–5 orchestrator (local skeleton)
-python scripts/run_nature_methods_pipeline.py pipeline
+python scripts/run_full_pipeline.py pipeline
 ```
 
 ### HPC design validation (Longleaf)
@@ -786,13 +786,13 @@ pmhc-hotspot wetlab-candidates --eval-manifest data/pdb/eval_set_expanded.yaml
 
 | Path | Purpose |
 |------|---------|
-| `docs/NATURE_METHODS_RUNBOOK.md` | Full runbook, gate checkpoints, env vars |
+| `docs/FULL_PIPELINE_RUNBOOK.md` | Full runbook, gate checkpoints, env vars |
 | `docs/hotspot_schema.yaml` | Standard hotspot YAML v1.0 spec |
-| `data/pmhc_hotspot_benchmark/` | Publication benchmark bundle |
+| `data/pmhc_hotspot_benchmark/` | Community benchmark bundle |
 | `data/pdb/eval_set_expanded.yaml` | Expanded 30-structure holdout (template) |
 | `data/pdb/training_set.yaml` | Training set manifest (populated by `expand-dataset`) |
 | `INSTALL.md` | Installation quick reference |
-| `paper/` | Draft manuscript + figure/table placeholders |
+| `reports/` | Research report drafts + figure/table placeholders |
 | `results/design_validation_report.md` | Design validation results template |
 
 ### External tools (no API keys)

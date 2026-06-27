@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Nature Methods pipeline orchestrator — runs phases 0–2 locally, stubs HPC phases."""
+"""Full pipeline orchestrator — runs phases 0–2 locally, stubs HPC phases."""
 
 from __future__ import annotations
 

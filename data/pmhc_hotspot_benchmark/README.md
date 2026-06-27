@@ -23,7 +23,7 @@ pmhc-hotspot run --yaml-out data/pmhc_hotspot_benchmark/predictions/1BD2_hotspot
 pmhc-hotspot ml-compare --config configs/baseline.yaml
 ```
 
-## Baseline targets (publication)
+## Baseline targets
 | Model | Recall@5 | AUC-ROC |
 |-------|----------|---------|
 | XGBoost | 0.76 | 0.88 |

@@ -1,6 +1,6 @@
 # Results (draft)
 
-Populate after gate checkpoints in `docs/NATURE_METHODS_RUNBOOK.md`.
+Populate after gate checkpoints in `docs/FULL_PIPELINE_RUNBOOK.md`.
 
 ## Benchmark (Table 1)
 | Model | Recall@5 | AUC-ROC |

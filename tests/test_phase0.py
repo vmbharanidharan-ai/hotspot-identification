@@ -1,4 +1,4 @@
-"""Tests for Nature Methods Phase 0 foundation."""
+"""Tests for Phase 0 foundation modules."""
 
 from __future__ import annotations
 

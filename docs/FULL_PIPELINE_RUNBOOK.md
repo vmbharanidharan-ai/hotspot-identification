@@ -1,6 +1,6 @@
-# Nature Methods build runbook
+# Full pipeline runbook
 
-This repo implements the 16-week plan from `pmhc_hotspot_cursor_instructions.md`.
+End-to-end workflow for dataset expansion, design validation, GNN training, benchmark bundle, and wet-lab handoff.
 
 ## Quick start (no API keys)
 
@@ -16,7 +16,7 @@ pmhc-hotspot run examples/minimal_pmhc.pdb --allele HLA-A*02:01 \
   --yaml-out artifacts/hotspot.yaml
 
 # Full local pipeline skeleton
-python scripts/run_nature_methods_pipeline.py pipeline
+python scripts/run_full_pipeline.py pipeline
 ```
 
 ## API keys and external tools

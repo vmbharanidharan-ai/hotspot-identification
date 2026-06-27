@@ -19,7 +19,7 @@ pmhc-hotspot predict examples/minimal_pmhc.pdb \
   --output results/prediction.yaml
 ```
 
-## Reproduce paper results
+## Reproduce benchmark results
 
 1. Download benchmark structures into `data/pmhc_hotspot_benchmark/structures/`
 2. Run `pmhc-hotspot benchmark --manifest data/pmhc_hotspot_benchmark/benchmark_split.yaml`
@@ -33,4 +33,4 @@ pmhc-hotspot predict examples/minimal_pmhc.pdb \
 | Schema validation | `pip install -e ".[schema]"` |
 | Cursor SDK automation | `pip install cursor-sdk` + `CURSOR_API_KEY` |
 
-See `docs/NATURE_METHODS_RUNBOOK.md` for Longleaf HPC steps.
+See `docs/FULL_PIPELINE_RUNBOOK.md` for Longleaf HPC steps.
