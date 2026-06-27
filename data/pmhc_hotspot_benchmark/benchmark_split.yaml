@@ -1,0 +1,8 @@
+holdout:
+  - 1BD2
+  - 3UTT
+  # Extend with eval_set_expanded.yaml entries
+
+train_sources:
+  - stcrdab
+  - crawled

@@ -67,3 +67,26 @@ def describe_contact_mode(mode: ContactMode) -> str:
         "strict": f"<= {STRICT_CUTOFF_A} A with peptide side-chain involvement",
     }
     return descriptions[mode]
+
+
+def extract_contact_positions_via_generator(
+    structure,
+    entry,
+    *,
+    contact_mode: ContactMode = "standard",
+) -> set[str]:
+    """Delegate peptide contact labeling to ContactLabelGenerator (Phase 0.2)."""
+    from pmhc_hotspot.automation.label_generator import ContactLabelGenerator
+
+    payload = ContactLabelGenerator(contact_mode=contact_mode).label_structure_object(
+        structure,
+        pdb_id=entry.pdb_id,
+        peptide_chain=entry.peptide_chain,
+        hla_chain=entry.hla_chain,
+        tcr_chains=list(entry.tcr_chains),
+    )
+    return {
+        pos
+        for pos, row in payload.get("residues", {}).items()
+        if row.get("is_tcr_contact")
+    }

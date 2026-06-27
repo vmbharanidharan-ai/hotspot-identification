@@ -1,0 +1,6 @@
+# Feature importance (supplementary table — populate after gnn_analysis)
+
+Run:
+```bash
+python -c "from pmhc_hotspot.ml.gnn_analysis import analyze_feature_importance; ..."
+```

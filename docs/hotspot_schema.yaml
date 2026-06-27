@@ -1,0 +1,44 @@
+# pmhc-hotspot output format v1.0
+# Describes predicted TCR-contact residues and their properties
+
+metadata:
+  pdb_id: 1AO7
+  allele: HLA-A*02:01
+  peptide_sequence: GILGFVFTL
+  peptide_chain: C
+  mhc_chain: A
+  tcr_chains: [B, D]
+  timestamp: 2024-01-15T10:30:00Z
+  model_version: xgboost_v2
+  tool: pmhc-hotspot v0.3.0
+
+hotspots:
+  - residue_index: 4
+    one_letter_code: F
+    score: 0.94
+    confidence: high
+    tcr_contact_probability: 0.88
+    contact_count: 3
+    patch_id: A
+  - residue_index: 5
+    one_letter_code: V
+    score: 0.87
+    confidence: high
+    tcr_contact_probability: 0.85
+    contact_count: 2
+    patch_id: A
+
+patches:
+  - patch_id: A
+    residue_indices: [4, 5, 7]
+    center_residue: 5
+    contiguity_score: 0.95
+    geometric_center: [10.2, 20.1, 5.3]
+    importance_rank: 1
+
+contacts:
+  contact_entropy_per_residue:
+    - index: 4
+      entropy: 0.12
+    - index: 5
+      entropy: 0.14

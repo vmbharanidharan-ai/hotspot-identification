@@ -10,8 +10,7 @@ from Bio.PDB import PDBList
 from pmhc_hotspot.benchmark.contact_labels import (
     CONTACT_MODES,
     ContactMode,
-    _peptide_tcr_contact_pairs,
-    residue_is_contact,
+    extract_contact_positions_via_generator,
 )
 from pmhc_hotspot.benchmark.manifest import BenchmarkEntry
 from pmhc_hotspot.data.validation import safe_cache_path, validate_pdb_id
@@ -197,49 +196,8 @@ def extract_peptide_contact_positions(
     """
     Return P-position labels for peptide residues contacting the TCR.
 
-    contact_mode:
-      - permissive: any heavy atom <= 5.0 A (legacy-style, loose)
-      - standard: <= 4.5 A with side-chain involvement (default)
-      - strict: <= 3.5 A with peptide side-chain involvement
+    Delegates to ContactLabelGenerator for vectorized labeling (Phase 0.2).
     """
     if contact_mode not in CONTACT_MODES:
         raise ValueError(f"contact_mode must be one of {CONTACT_MODES}")
-
-    pep_id, hla_ids = infer_peptide_hla_chains(
-        structure,
-        entry.peptide_chain,
-        entry.hla_chain,
-    )
-    pep_chain = get_chain(structure, pep_id)
-    prm = PeptideResidueMap(pep_chain)
-
-    tcr_chains = list(entry.tcr_chains)
-    if not tcr_chains:
-        model = structure[0]
-        known = {pep_id, *hla_ids}
-        tcr_chains = [
-            chain.id
-            for chain in model
-            if chain.id not in known and len(chain_ca_residues(chain)) >= 80
-        ]
-
-    tcr_atoms: list = []
-    for chain_id in tcr_chains:
-        try:
-            chain = get_chain(structure, chain_id)
-        except ValueError:
-            logger.warning("TCR chain %s missing in %s", chain_id, entry.pdb_id)
-            continue
-        tcr_atoms.extend(heavy_atoms(chain_ca_residues(chain)))
-
-    if not tcr_atoms:
-        logger.warning("No TCR coordinates for %s", entry.pdb_id)
-        return set()
-
-    contacted: set[str] = set()
-    for i, residue in enumerate(prm.residues):
-        pairs = _peptide_tcr_contact_pairs(residue, tcr_atoms)
-        if residue_is_contact(pairs, contact_mode):
-            contacted.add(prm.position_label(i))
-
-    return contacted
+    return extract_contact_positions_via_generator(structure, entry, contact_mode=contact_mode)

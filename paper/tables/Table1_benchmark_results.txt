@@ -1,0 +1,4 @@
+Model       Recall@5  Precision@5  AUC-ROC
+XGBoost     0.76      0.82         0.88
+GNN         TBD       TBD          TBD
+Hybrid      TBD       TBD          TBD

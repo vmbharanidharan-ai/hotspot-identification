@@ -34,7 +34,9 @@ def main():
 @click.option("--peptide-chain", default=None, help="Peptide chain ID (auto-detect if omitted)")
 @click.option("--hla-chain", default=None, help="HLA chain ID (auto-detect if omitted)")
 @click.option("--out", "out_tsv", default="hotspots.tsv", help="Output TSV path")
-@click.option("--json-out", default=None, help="Optional JSON output path")
+@click.option("--json-out", default=None, help="Output JSON path")
+@click.option("--yaml-out", default=None, help="Export standardized hotspot YAML v1.0")
+@click.option("--with-uncertainty", is_flag=True, help="Attach confidence estimates to outputs")
 def run_cmd(
     structure_path,
     allele,
@@ -43,6 +45,8 @@ def run_cmd(
     hla_chain,
     out_tsv,
     json_out,
+    yaml_out,
+    with_uncertainty,
 ):
     """Score peptide hotspots for a pMHC structure."""
     predictor = HotspotPredictor(
@@ -64,9 +68,31 @@ def run_cmd(
     to_tsv(result, out_tsv)
     click.echo(f"Wrote {out_tsv}")
 
+    confidences = None
+    if with_uncertainty:
+        from pmhc_hotspot.scoring.baseline import HotspotScorer
+        from pmhc_hotspot.uncertainty import ConfidenceEstimator
+
+        estimator = ConfidenceEstimator()
+        confidences = estimator.estimate_for_result(result, scorer=HotspotScorer(allele))
+
     if json_out:
         to_json(result, json_out)
         click.echo(f"Wrote {json_out}")
+
+    if yaml_out:
+        from pmhc_hotspot.hotspot_export import export_hotspot_yaml
+
+        export_hotspot_yaml(
+            result,
+            pdb_id=Path(structure_path).stem.upper(),
+            peptide_seq=result.peptide_sequence,
+            allele=result.allele,
+            tcr_chains=[],
+            output_file=yaml_out,
+            confidences=confidences,
+        )
+        click.echo(f"Wrote {yaml_out}")
 
     click.echo(f"Allele: {result.allele or 'unknown (generic MHC-I rules)'}")
     click.echo(f"Peptide ({result.peptide_chain_id}): {result.peptide_sequence}")
@@ -662,6 +688,170 @@ def run_design_validation_cmd(config_path, no_gatekeeper):
         decisions = run_gatekeeper(cfg)
         for decision in decisions:
             click.echo(f"Gatekeeper {decision.target_id}: {decision.verdict}")
+
+
+@main.command("predict")
+@click.argument("structure_path", type=click.Path(exists=True))
+@click.option("--allele", default=None)
+@click.option("--peptide-chain", default=None)
+@click.option("--hla-chain", default=None)
+@click.option("--model", "model_type", default="xgboost", type=click.Choice(["xgboost", "gnn", "hybrid", "deterministic"]))
+@click.option("--checkpoint", default=None, help="Optional model checkpoint or bundle path")
+@click.option("--output-format", default="hotspot_yaml", type=click.Choice(["hotspot_yaml", "tsv", "json", "rfdiffusion"]))
+@click.option("--output", "output_path", default="results/prediction.yaml", show_default=True)
+@click.option("--with-uncertainty", is_flag=True)
+def predict_cmd(
+    structure_path,
+    allele,
+    peptide_chain,
+    hla_chain,
+    model_type,
+    checkpoint,
+    output_format,
+    output_path,
+    with_uncertainty,
+):
+    """Phase 4.2: unified prediction with optional GNN/hybrid backend."""
+    scoring_mode = model_type if model_type != "xgboost" else "ml"
+    predictor = HotspotPredictor(
+        allele=allele,
+        peptide_chain=peptide_chain,
+        hla_chain=hla_chain,
+        scoring_mode=scoring_mode,
+        ml_bundle=checkpoint,
+    )
+    result = predictor.predict(structure_path)
+
+    confidences = None
+    if with_uncertainty:
+        from pmhc_hotspot.scoring.baseline import HotspotScorer
+        from pmhc_hotspot.uncertainty import ConfidenceEstimator
+
+        confidences = ConfidenceEstimator().estimate_for_result(result, scorer=HotspotScorer(allele))
+
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if output_format == "tsv":
+        to_tsv(result, out)
+    elif output_format == "json":
+        to_json(result, out)
+    elif output_format == "rfdiffusion":
+        export_rfdiffusion_template(result, out)
+    else:
+        from pmhc_hotspot.hotspot_export import export_hotspot_yaml
+
+        export_hotspot_yaml(
+            result,
+            pdb_id=Path(structure_path).stem.upper(),
+            peptide_seq=result.peptide_sequence,
+            allele=result.allele,
+            tcr_chains=[],
+            output_file=out,
+            confidences=confidences,
+        )
+    click.echo(f"Wrote {out} ({output_format}, model={model_type})")
+
+
+@main.command("crawl-pdb")
+@click.option("--cache-dir", default="data/pdb", show_default=True)
+@click.option("--pdb-id", multiple=True, help="Specific PDB IDs (default: RCSB search)")
+@click.option("--no-download", is_flag=True, help="Search/analyze only")
+def crawl_pdb_cmd(cache_dir, pdb_id, no_download):
+    """Phase 0.1: crawl RCSB for TCR–pMHC structures."""
+    from pmhc_hotspot.automation.pdb_crawler import PDBCrawler
+
+    crawler = PDBCrawler(cache_dir=cache_dir)
+    entries = crawler.crawl(pdb_ids=list(pdb_id) if pdb_id else None, download=not no_download)
+    path = crawler.write_results(entries, cache_dir)
+    click.echo(f"Crawled {len(entries)} entries → {path}")
+
+
+@main.command("label-contacts")
+@click.option("--pdb-dir", default="data/pdb", show_default=True)
+@click.option("--output-dir", default="data/pdb/labels", show_default=True)
+@click.option("--workers", default=4, show_default=True)
+@click.option("--contact-mode", default="standard", show_default=True)
+def label_contacts_cmd(pdb_dir, output_dir, workers, contact_mode):
+    """Phase 0.2: batch vectorized TCR contact labels."""
+    from pmhc_hotspot.automation.label_generator import batch_label_all_pdbs
+
+    summary = batch_label_all_pdbs(pdb_dir, output_dir=output_dir, n_workers=workers, contact_mode=contact_mode)
+    click.echo(f"Labeled {len(summary.get('labeled', []))} structures")
+
+
+@main.command("expand-dataset")
+@click.option("--cache-dir", default="data/pdb", show_default=True)
+@click.option("--no-crawl", is_flag=True)
+def expand_dataset_cmd(cache_dir, no_crawl):
+    """Phase 1: crawl, QC, and label structures for dataset expansion."""
+    from pmhc_hotspot.automation.dataset_expansion import (
+        run_dataset_expansion,
+        write_clean_structures_report,
+        write_training_set_yaml,
+    )
+
+    report = run_dataset_expansion(cache_dir=Path(cache_dir), crawl=not no_crawl)
+    clean_path = write_clean_structures_report(report, Path(cache_dir))
+    train_path = write_training_set_yaml(report.training_set)
+    click.echo(f"Passed QC: {report.passed_qc} | training: {len(report.training_set)}")
+    click.echo(f"Wrote {clean_path} and {train_path}")
+
+
+@main.command("design")
+@click.option("--eval-manifest", type=click.Path(exists=True), required=True)
+@click.option("--output-dir", default="artifacts/design_outputs", show_default=True)
+@click.option("--strategies", default="hotspot,random,exposed,central", show_default=True)
+@click.option("--num-designs", default=10, show_default=True)
+def design_cmd(eval_manifest, output_dir, strategies, num_designs):
+    """Phase 2.2: RFdiffusion design batch across control strategies."""
+    import yaml
+    from pmhc_hotspot.design.rfdiffusion_orchestrator import RFdiffusionDesigner, batch_design_all_controls
+
+    with open(eval_manifest) as fh:
+        data = yaml.safe_load(fh) or {}
+    entries = data.get("eval_structures") or data.get("structures") or []
+    for entry in entries:
+        pid = entry["pdb_id"].upper()
+        entry.setdefault("pdb_path", f"data/pdb/{pid}.pdb")
+    summary = batch_design_all_controls(
+        entries,
+        strategies=[s.strip() for s in strategies.split(",")],
+        output_dir=output_dir,
+        designer=RFdiffusionDesigner(num_designs=num_designs),
+    )
+    click.echo(f"Design jobs: {summary['n_jobs']} → {summary['summary_path']}")
+
+
+@main.command("score-designs")
+@click.option("--design-dir", type=click.Path(exists=True), required=True)
+@click.option("--mhc-pdb", type=click.Path(exists=True), required=True)
+@click.option("--output", "output_json", default="artifacts/design_outputs/af2_scores.json")
+def score_designs_cmd(design_dir, mhc_pdb, output_json):
+    """Phase 2.3: AF2 interface scoring for designed structures."""
+    from pmhc_hotspot.design.af2_scorer import AF2InterfaceScorer
+
+    scorer = AF2InterfaceScorer()
+    results = scorer.batch_score_designs(Path(design_dir), Path(mhc_pdb))
+    Path(output_json).write_text(json.dumps(results, indent=2))
+    click.echo(f"Scored {len(results)} designs → {output_json}")
+
+
+@main.command("wetlab-candidates")
+@click.option("--eval-manifest", type=click.Path(exists=True), required=True)
+@click.option("--n", default=20, show_default=True)
+@click.option("--output", "output_csv", default="results/wetlab_candidates.csv", show_default=True)
+def wetlab_candidates_cmd(eval_manifest, n, output_csv):
+    """Phase 5: select top candidates for experimental validation."""
+    import yaml
+    from pmhc_hotspot.wetlab import select_candidates_for_wetlab
+
+    with open(eval_manifest) as fh:
+        data = yaml.safe_load(fh) or {}
+    entries = data.get("eval_structures") or data.get("structures") or []
+    for entry in entries:
+        entry.setdefault("pdb_path", f"data/pdb/{entry['pdb_id'].upper()}.pdb")
+    path = select_candidates_for_wetlab(entries, n_candidates=n, output_csv=Path(output_csv))
+    click.echo(f"Wrote {path}")
 
 
 if __name__ == "__main__":

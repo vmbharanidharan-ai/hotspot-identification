@@ -10,7 +10,7 @@ pmhc-hotspot is a structure-first residue prioritization tool that bridges solve
 [![CI](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml/badge.svg)](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Quick links:** [Installation](#installation) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Design philosophy](#design-philosophy) · [Performance](#performance--validation) · [FAQ](#faq)
+**Quick links:** [Installation](#installation) · [Quick start](#quick-start) · [Nature Methods pipeline](#nature-methods-pipeline-phases-05) · [How it works](#how-it-works) · [Design philosophy](#design-philosophy) · [Performance](#performance--validation) · [FAQ](#faq)
 
 ---
 
@@ -31,9 +31,10 @@ pmhc-hotspot is a structure-first residue prioritization tool that bridges solve
 13. [RFdiffusion integration](#rfdiffusion-integration)
 14. [Troubleshooting](#troubleshooting)
 15. [FAQ](#faq)
-16. [Development](#development)
-17. [Citation](#citation)
-18. [License](#license)
+16. [Nature Methods pipeline (Phases 0–5)](#nature-methods-pipeline-phases-05)
+17. [Development](#development)
+18. [Citation](#citation)
+19. [License](#license)
 
 ---
 
@@ -186,6 +187,15 @@ Development + ML extras:
 pip install -e ".[dev,ml]"
 ```
 
+GNN training (GraphSAGE / PyG path):
+
+```bash
+pip install -e ".[gnn]"
+# torch-geometric: install separately per https://pytorch-geometric.readthedocs.io
+```
+
+See [INSTALL.md](INSTALL.md) for the full Nature Methods setup and [docs/NATURE_METHODS_RUNBOOK.md](docs/NATURE_METHODS_RUNBOOK.md) for Longleaf HPC steps.
+
 ### conda
 
 ```bash
@@ -207,8 +217,13 @@ conda build conda/
 ### CLI
 
 ```bash
-# Score hotspots → TSV (+ optional JSON)
-pmhc-hotspot run complex.pdb --allele HLA-A*02:01 --out hotspots.tsv --json-out hotspots.json
+# Score hotspots → TSV (+ optional JSON / YAML / uncertainty)
+pmhc-hotspot run complex.pdb --allele HLA-A*02:01 --out hotspots.tsv \
+  --json-out hotspots.json --yaml-out hotspot.yaml --with-uncertainty
+
+# Unified prediction API (XGBoost / GNN / hybrid)
+pmhc-hotspot predict complex.pdb --allele HLA-A*02:01 \
+  --model hybrid --with-uncertainty --output results/prediction.yaml
 
 # Per-residue explanation
 pmhc-hotspot explain complex.pdb --allele HLA-A*02:01
@@ -449,11 +464,21 @@ pmhc-hotspot ml-train --download --contact-mode standard
 
 | Command | Description |
 |---------|-------------|
-| `run STRUCTURE` | Score hotspots → TSV (+ optional JSON) |
+| `run STRUCTURE` | Score hotspots → TSV (+ optional JSON / YAML / uncertainty) |
+| `predict STRUCTURE` | Unified prediction (`xgboost` / `gnn` / `hybrid`) → hotspot YAML, TSV, JSON, or RFdiffusion |
 | `explain STRUCTURE` | Per-residue score breakdown |
 | `export-rfdiffusion STRUCTURE OUTPUT.yaml` | RFdiffusion config template |
 | `validate STRUCTURE` | Structure checks without scoring |
 | `benchmark` | TCR-contact recovery on manifest |
+| `crawl-pdb` | RCSB crawl + chain inference for TCR–pMHC structures |
+| `label-contacts` | Batch vectorized TCR contact labels |
+| `expand-dataset` | Crawl, QC, and label structures for dataset expansion |
+| `export-design` | Export RFdiffusion conditioning YAML for control groups |
+| `design` | RFdiffusion design batch across control strategies |
+| `score-designs` | AF2 interface scoring for designed structures |
+| `run-design-validation` | Compare control groups and write ranking reports |
+| `wetlab-candidates` | Select top candidates for experimental validation |
+| `ml-compare` | Compare XGBoost vs GNN on benchmark structures |
 | `ml-pretrain` | Stage 1: public binding data CV |
 | `ml-fine-tune` | Stage 2: structural residue labels |
 | `ml-staged` | Full two-stage training + optional `--save-model` |
@@ -608,7 +633,7 @@ Benchmark and training labels mark residues contacted by **the TCR present in ea
 4. **No immunogenicity** — Hotspots ≠ immunodominance.
 5. **Assumes MHC binding** — Input peptide should already be a plausible binder (validate with NetMHCpan/MHCflurry first).
 6. **Structure quality** — Missing atoms, high B-factors, or low-confidence regions reduce reliability (`validate` + `explain`).
-7. **RFdiffusion loop unvalidated** — Hotspot export is provided; designed binder contact rates are not yet systematically benchmarked in this package.
+7. **RFdiffusion design loop** — Design validation scaffolding is in place (`design`, `score-designs`, `run-design-validation`); full 1200-design HPC runs are pending Longleaf execution.
 
 ### Recommended ensemble workflow
 
@@ -730,6 +755,60 @@ No. pmhc-hotspot **selects hotspots**; RFdiffusion **generates binders** conditi
 
 ---
 
+## Nature Methods pipeline (Phases 0–5)
+
+Scaffold for the 16-week Nature Methods plan: dataset expansion, design validation, GNN training, benchmark bundle, and wet-lab handoff.
+
+### Local pipeline
+
+```bash
+# Phase 0: crawl + label + test foundation
+pmhc-hotspot crawl-pdb --pdb-id 1BD2 --pdb-id 3UTT
+pmhc-hotspot label-contacts --pdb-dir data/pdb --workers 4
+
+# Phase 1: expand training set (requires network for RCSB crawl)
+pmhc-hotspot expand-dataset
+
+# Phase 2–5 orchestrator (local skeleton)
+python scripts/run_nature_methods_pipeline.py pipeline
+```
+
+### HPC design validation (Longleaf)
+
+```bash
+pmhc-hotspot design --eval-manifest data/pdb/eval_set_expanded.yaml
+pmhc-hotspot score-designs --design-dir artifacts/design_outputs --mhc-pdb data/pdb/1BD2.pdb
+pmhc-hotspot run-design-validation
+pmhc-hotspot wetlab-candidates --eval-manifest data/pdb/eval_set_expanded.yaml
+```
+
+### Key artifacts
+
+| Path | Purpose |
+|------|---------|
+| `docs/NATURE_METHODS_RUNBOOK.md` | Full runbook, gate checkpoints, env vars |
+| `docs/hotspot_schema.yaml` | Standard hotspot YAML v1.0 spec |
+| `data/pmhc_hotspot_benchmark/` | Publication benchmark bundle |
+| `data/pdb/eval_set_expanded.yaml` | Expanded 30-structure holdout (template) |
+| `data/pdb/training_set.yaml` | Training set manifest (populated by `expand-dataset`) |
+| `INSTALL.md` | Installation quick reference |
+| `paper/` | Draft manuscript + figure/table placeholders |
+| `results/design_validation_report.md` | Design validation results template |
+
+### External tools (no API keys)
+
+| Tool | Env var | When needed |
+|------|---------|-------------|
+| RFdiffusion | `RFDIFFUSION_BIN` | `pmhc-hotspot design` on GPU |
+| AlphaFold2 / ColabFold | `AF2_BIN` | `pmhc-hotspot score-designs` |
+| AutoDock Vina | `VINA_BIN` | Post-hoc docking validation |
+| NetMHCpan | `NETMHCPAN_HOME` | GNN sequence binding features (optional) |
+| Cursor SDK | `CURSOR_API_KEY` | Headless agent automation only |
+
+RCSB PDB crawl and core prediction require **no API keys**.
+
+---
+
 ## Development
 
 ```bash
@@ -737,7 +816,7 @@ git clone https://github.com/vmbharanidharan-ai/hotspot-identification.git
 cd hotspot-identification
 pip install -e ".[dev,ml]"
 
-pytest
+pytest                    # 84+ tests including tests/test_phase0.py
 pytest --cov=pmhc_hotspot --cov-report=term-missing
 ruff check src tests
 black --check src tests
@@ -749,6 +828,11 @@ black --check src tests
 src/pmhc_hotspot/
 ├── api.py                 # HotspotPredictor
 ├── cli.py                 # Command-line interface
+├── hotspot_export.py      # Standard hotspot YAML v1.0 export/import
+├── automation/            # PDB crawler, contact labels, dataset expansion
+├── design/                # Control strategies, RFdiffusion, AF2, validation
+├── uncertainty/           # Platt calibration + feature jitter confidence
+├── wetlab/                # Wet-lab candidate selection
 ├── features/
 │   ├── sasa.py            # FreeSASA wrapper
 │   ├── spatial.py         # BioPython NeighborSearch helpers
@@ -756,7 +840,7 @@ src/pmhc_hotspot/
 │   ├── contacts.py        # HLA / peptide contact counts
 │   └── geometry.py        # Protrusion, curvature, bulge (our code)
 ├── scoring/               # Baseline scorer, patches, selection (our code)
-├── ml/                    # Staged training, hybrid inference, persistence
+├── ml/                    # Staged training, hybrid inference, GNN (GraphSAGE)
 └── benchmark/             # Manifest, contact labels, holdout validation
 ```
 
@@ -769,9 +853,13 @@ src/pmhc_hotspot/
 | ML inference + hybrid scoring | ✅ v0.3 |
 | Soft anchor suppression | ✅ v0.3 |
 | Leave-structures-out validation | ✅ v0.3 |
+| Binder-conditioning pipeline (M3–M6) | ✅ v0.4 |
+| Automated PDB crawl + vectorized contact labels | ✅ v0.4 |
+| Design validation scaffolding (RFdiffusion + AF2) | ✅ v0.4 |
+| GraphSAGE GNN + benchmark bundle | ✅ v0.4 (train on HPC) |
+| Expanded eval set (30 PDBs) + full design run | In progress |
 | Multi-allele expansion | Planned |
 | MHC-II support | Planned |
-| RFdiffusion design contact benchmarking | Planned |
 
 ---
 
@@ -785,7 +873,7 @@ If you use pmhc-hotspot in research, please cite:
   author = {Bharanidharan, Vedha},
   year   = {2026},
   url    = {https://github.com/vmbharanidharan-ai/hotspot-identification},
-  version = {0.3.0}
+  version = {0.4.0}
 }
 ```
 
@@ -809,4 +897,4 @@ MIT License — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** 0.3.0 · **Last updated:** June 2025 · **Status:** Active development; feedback welcome via [GitHub Issues](https://github.com/vmbharanidharan-ai/hotspot-identification/issues).
+**Version:** 0.4.0 · **Last updated:** June 2026 · **Status:** Active development; feedback welcome via [GitHub Issues](https://github.com/vmbharanidharan-ai/hotspot-identification/issues).

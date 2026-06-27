@@ -1,0 +1,4 @@
+{
+  "failure_modes": [],
+  "notes": "Populate via pmhc-hotspot run-design-validation and design/failure_analysis.py"
+}

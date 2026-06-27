@@ -1,0 +1,11 @@
+# Expanded eval set template (Phase 1.2)
+# Merge with src/pmhc_hotspot/benchmark/tcr_pmhc_manifest.yaml for publication holdout.
+
+eval_structures:
+  - pdb_id: 1BD2
+    allele: HLA-A*02:01
+    reason: existing_baseline
+  # Add ~29 new diverse structures after crawl QC:
+  # - pdb_id: 5TS8
+  #   allele: HLA-B*35:01
+  #   reason: new_allele_coverage

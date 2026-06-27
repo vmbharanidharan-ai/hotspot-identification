@@ -66,6 +66,7 @@ gnn = [
     "torch>=2.0,<3",
     "xgboost>=2.0,<3",
 ]
+# torch-geometric: install separately per https://pytorch-geometric.readthedocs.io
 docs = [
     "myst-parser>=2.0",
     "sphinx>=7.0",

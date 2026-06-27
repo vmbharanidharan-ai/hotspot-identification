@@ -24,6 +24,7 @@ htmlcov/
 
 # Data & outputs
 data/pdb/
+!data/pdb/*.yaml
 artifacts/
 outputs/
 hotspots.tsv

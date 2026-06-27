@@ -1,0 +1,4 @@
+# Training set manifest template (Phase 1.3)
+# Populated by: pmhc-hotspot expand-dataset
+
+training_structures: []

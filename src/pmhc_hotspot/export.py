@@ -27,6 +27,13 @@ def to_json(result: PredictionResult, path: str | Path) -> None:
         json.dump(result.to_dict(), fh, indent=2)
 
 
+def export_hotspot_yaml(result: PredictionResult, path: str | Path, **kwargs) -> Path:
+    """Re-export standardized hotspot YAML v1.0 (see hotspot_export module)."""
+    from pmhc_hotspot.hotspot_export import export_hotspot_yaml as _export
+
+    return _export(result, output_file=path, **kwargs)
+
+
 def build_contig_template(
     peptide_chain_id: str,
     peptide_resseqs: list[int],
