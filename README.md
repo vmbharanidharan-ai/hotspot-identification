@@ -10,7 +10,7 @@ pmhc-hotspot is a structure-first residue prioritization tool that bridges solve
 [![CI](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml/badge.svg)](https://github.com/vmbharanidharan-ai/hotspot-identification/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Quick links:** [Installation](#installation) · [Quick start](#quick-start) · [Full pipeline](#full-pipeline-phases-05) · [How it works](#how-it-works) · [Design philosophy](#design-philosophy) · [Performance](#performance--validation) · [FAQ](#faq)
+**Quick links:** [Installation](#installation) · [Quick start](#quick-start) · [ML model](#using-the-ml-model) · [GNN model](#using-the-gnn-model) · [Full pipeline](#full-pipeline-phases-05) · [FAQ](#faq)
 
 ---
 
@@ -23,18 +23,19 @@ pmhc-hotspot is a structure-first residue prioritization tool that bridges solve
 5. [Quick start](#quick-start)
 6. [How it works](#how-it-works)
 7. [Using the ML model](#using-the-ml-model)
-8. [Command-line reference](#command-line-reference)
-9. [Python API](#python-api)
-10. [Performance & validation](#performance--validation)
-11. [Biological validation](#biological-validation)
-12. [Limitations & caveats](#limitations--caveats)
-13. [RFdiffusion integration](#rfdiffusion-integration)
-14. [Troubleshooting](#troubleshooting)
-15. [FAQ](#faq)
-16. [Full pipeline (Phases 0–5)](#full-pipeline-phases-05)
-17. [Development](#development)
-18. [Citation](#citation)
-19. [License](#license)
+8. [Using the GNN model](#using-the-gnn-model)
+9. [Command-line reference](#command-line-reference)
+10. [Python API](#python-api)
+11. [Performance & validation](#performance--validation)
+12. [Biological validation](#biological-validation)
+13. [Limitations & caveats](#limitations--caveats)
+14. [RFdiffusion integration](#rfdiffusion-integration)
+15. [Troubleshooting](#troubleshooting)
+16. [FAQ](#faq)
+17. [Full pipeline (Phases 0–5)](#full-pipeline-phases-05)
+18. [Development](#development)
+19. [Citation](#citation)
+20. [License](#license)
 
 ---
 
@@ -460,6 +461,72 @@ pmhc-hotspot ml-train --download --contact-mode standard
 
 ---
 
+## Using the GNN model
+
+pmhc-hotspot ships **two graph-based paths** for TCR-contact prediction. Both learn from the same residue-level contact labels as XGBoost, but model interface geometry differently.
+
+| Path | Module | CLI | Requires |
+|------|--------|-----|----------|
+| **PeptideGCN** (M4) | `ml/gnn/` | `pmhc-hotspot ml-compare` | `pip install -e ".[gnn]"` (PyTorch) |
+| **GraphSAGE** (Phase 3) | `ml/gnn_*.py` | Python API / training scripts | PyTorch + [torch-geometric](https://pytorch-geometric.readthedocs.io) |
+
+### Install
+
+```bash
+pip install -e ".[gnn]"
+# GraphSAGE only — install torch-geometric for your CUDA/CPU build:
+# https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html
+```
+
+### Compare GNN vs XGBoost (PeptideGCN)
+
+Grouped cross-validation on the same residue features and CV splits:
+
+```bash
+pmhc-hotspot ml-compare --config configs/baseline.yaml --download
+```
+
+Writes `artifacts/reports/gnn_vs_xgboost.json` with ROC-AUC for both models. Configure manifests, hidden size, and epochs in `configs/baseline.yaml`.
+
+For STCRDab-scale training, point `training_manifest` at your manifest and set `exclude_holdout_from_training: true` so eval PDBs stay held out.
+
+### Predict with GNN / hybrid scoring
+
+```bash
+pmhc-hotspot predict complex.pdb \
+  --allele HLA-A*02:01 \
+  --model hybrid \
+  --checkpoint data/models/staged_xgb.joblib \
+  --with-uncertainty \
+  --output results/prediction.yaml
+```
+
+`--model` accepts `xgboost` (XGBoost bundle), `gnn`, `hybrid`, or `deterministic`. Hybrid blends statistical + ML scores from a saved staged bundle.
+
+### GraphSAGE stack (expanded dataset)
+
+For the full pipeline after `expand-dataset`, the GraphSAGE path builds **per-structure graphs** from peptide residues:
+
+| File | Role |
+|------|------|
+| `ml/gnn_features.py` | Multi-signal node/edge features (SASA, contacts, sequence, optional MHC binding) |
+| `ml/gnn_dataset.py` | PyG `Dataset` from labeled PDBs |
+| `ml/gnn_model.py` | `HotspotGNN` — multi-layer GraphSAGE + residue classifier |
+| `ml/gnn_train.py` | Training loop with early stopping |
+| `ml/gnn_analysis.py` | Feature-importance via perturbation |
+| `ml/gnn_uncertainty.py` | Uncertainty head stub |
+
+Train after labeling structures:
+
+```bash
+pmhc-hotspot label-contacts --pdb-dir data/pdb
+# Then use gnn_dataset + gnn_train from Python, or ml-compare for quick PeptideGCN baseline
+```
+
+See `docs/FULL_PIPELINE_RUNBOOK.md` (Phase 3 / Gate 3: GNN recall@5 > 0.80 on expanded eval) and `docs/DESIGN_PIPELINE_RUNBOOK.md` (M4 section).
+
+---
+
 ## Command-line reference
 
 | Command | Description |
@@ -769,7 +836,11 @@ pmhc-hotspot label-contacts --pdb-dir data/pdb --workers 4
 # Phase 1: expand training set (requires network for RCSB crawl)
 pmhc-hotspot expand-dataset
 
-# Phase 2–5 orchestrator (local skeleton)
+# Phase 3: compare PeptideGCN vs XGBoost on benchmark
+pip install -e ".[gnn]"
+pmhc-hotspot ml-compare --config configs/baseline.yaml --download
+
+# Phases 0–2 orchestrator (local skeleton)
 python scripts/run_full_pipeline.py pipeline
 ```
 
